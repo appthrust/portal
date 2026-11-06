@@ -1,0 +1,46 @@
+apiVersion: appthrust.io/v1alpha1
+kind: ApplicationStackDefinition
+metadata:
+  name: portal
+spec:
+  access:
+    audiences:
+    - appthrust-platform-api
+    scopes:
+    - openid
+    - profile
+    - email
+  components:
+  - defaultValues:
+      livenessProbePath: /healthz
+      minScale: 1
+      port: 8080
+      publicURLEnv: PORTAL_PUBLIC_URL
+      readinessProbePath: /readyz
+    definitionRef:
+      name: web-service
+      version: v1
+    id: web
+  consumes:
+  - launcher.entries/v1
+  display:
+    category: collaborate
+    description: Every built-in app installed in this Project, in one place.
+    iconRef:
+      name: home
+    title: Home
+  publish:
+    hostnameLabel: home
+  releaseIdentityEnvPrefix: PORTAL
+  updatePolicy:
+    allowed:
+    - pinned
+    - follow
+    default: pinned
+  versions:
+  - default: true
+    images:
+      web: ghcr.io/appthrust/platform/portal@sha256:98eeedcd1f0653b6564ae7f6be1917ce88614380f64a4c41dbbbb8d65d5f0a21
+    name: 0.1.0
+    served: true
+    stream: "0.1"
