@@ -17,7 +17,7 @@ Imported from `appthrust/platform` commit
 - `dashboard/packages/portal/` → `web/`, including the SPA, development mock, and tests.
 - Neither source directory contained a README at the imported revision.
 
-The public Go SDK is `github.com/appthrust/appserver-go v0.2.0`; no platform checkout,
+The public Go SDK is `github.com/appthrust/appserver-go v0.3.0`; no platform checkout,
 module replacement, or private Go credential is required. The launcher and i18n
 packages use the published `^0.1.0` GitHub Packages versions rather than workspace
 packages. Tailwind scans the installed launcher package for its classes.
@@ -79,7 +79,8 @@ through a required BuildKit secret, never through build arguments or committed f
 `ApplicationStackDefinition/portal` in `appthrust-ink-pmc001` on 2026-11-06, excluding
 cluster-owned metadata. The served compatibility floor is `0.1.0`, stream `0.1`,
 with its original immutable `ghcr.io/appthrust/platform/portal` image. The next
-release is **`0.2.0`**, stream **`0.2`**. No speculative new-version image is committed.
+release is **`0.3.0`**, stream **`0.3`**, upgrading the shared server SDK to v0.3.0.
+No speculative new-version image is committed.
 
 After the release prerequisites are available, push a SemVer tag such as `v0.2.0`.
 The tag workflow:
