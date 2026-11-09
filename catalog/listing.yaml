@@ -1,0 +1,90 @@
+locales:
+  en:
+    title: Home
+    tagline: Open every app installed in your Project from one page, without hunting for addresses.
+    overview: |
+      Home is the starting page for everyone who works in a Project. It shows every built-in app installed in the Project as a card with its name, address and a short description, so people can find and open the tool they need without bookmarking each one.
+
+      Type in the search box and the cards narrow down as you type, matching app names and descriptions. Selecting a card opens its app, and an app that needs attention carries a badge, so people know before they click. The app switcher in the header lists the same apps and stays one click away.
+
+      Apps that provide their own launch entries, such as apps built and shared through Builder Console, appear below the installed apps in sections for the viewer's own apps, their department's apps and company-wide apps. Each provider decides who sees which entry; entries that are still being prepared or that need an access request are marked as such. The page works at phone width as well, and the display language switches between Japanese and English.
+
+      Home keeps no data of its own. It reads the list of installed apps from the Project each time the page opens, and people sign in with their organisation account. Administrators add or remove apps from the Dashboard through the Manage apps link.
+  ja:
+    title: Home
+    tagline: プロジェクトに入っているアプリを、アドレスを探さずに 1 つのページから開けます。
+    overview: |
+      Home は、プロジェクトで働く人みんなの入り口になるページです。プロジェクトにインストールされている組み込みアプリをすべてカードで並べ、名前・アドレス・短い説明を表示します。アプリごとにブックマークを作らなくても、使いたいツールをすぐに見つけて開けます。
+
+      検索欄に入力すると、アプリ名と説明に合うカードだけに入力中から絞り込まれます。カードを選ぶとそのアプリが開きます。注意が必要なアプリには印が付くので、開く前に状態が分かります。ヘッダーのアプリ切り替えにも同じアプリが並び、いつでもワンクリックで移動できます。
+
+      Builder Console で作って共有したアプリのように、起動先を提供するアプリがあれば、インストール済みアプリの下に「自分のアプリ」「部署のアプリ」「社内のアプリ」に分けて表示します。誰に何を見せるかは提供元のアプリが決め、準備中のものや申請が必要なものにはその旨が表示されます。スマートフォンの幅でも使え、表示言語は日本語と英語を切り替えられます。
+
+      Home 自体はデータを保存しません。ページを開くたびにプロジェクトからインストール済みアプリの一覧を読み込み、サインインには組織のアカウントを使います。アプリの追加や削除は、「アプリを管理」のリンクから Dashboard で行います。
+highlights:
+  - screenshot: launcher
+    locales:
+      en:
+        title: Every installed app on one page
+        body: Each app in the Project gets a card with its name, address and description. A badge flags an app that needs attention before anyone opens it.
+      ja:
+        title: インストール済みのアプリを 1 ページに
+        body: プロジェクトのアプリごとに、名前・アドレス・説明を載せたカードを表示します。注意が必要なアプリには印が付き、開く前に気づけます。
+  - screenshot: search
+    locales:
+      en:
+        title: Narrow down as you type
+        body: The search box filters the cards by app name and description while you type, so the right app is a few keystrokes away even when many are installed.
+      ja:
+        title: 入力しながら絞り込み
+        body: 検索欄に入力すると、アプリ名と説明に合うカードだけが入力中から残ります。アプリが増えても、数文字で目的のアプリにたどり着けます。
+  - screenshot: app-switcher
+    locales:
+      en:
+        title: Switch apps from the header
+        body: The app switcher lists every app in the Project and marks the one on screen, so moving to another tool takes one click.
+      ja:
+        title: ヘッダーからアプリを切り替え
+        body: アプリ切り替えを開くと、プロジェクトのアプリが一覧で表示され、表示中のアプリには印が付きます。別のツールへワンクリックで移れます。
+  - screenshot: mobile
+    locales:
+      en:
+        title: Works on a phone
+        body: At phone width the cards stack in one column and the search box and Manage apps link stay within reach.
+      ja:
+        title: スマートフォンでも使える
+        body: スマートフォンの幅ではカードが 1 列に並び、検索欄や「アプリを管理」のリンクもそのまま使えます。
+  - screenshot: english
+    locales:
+      en:
+        title: Japanese or English
+        body: One button in the header switches the page between Japanese and English, and the choice is remembered in the browser.
+      ja:
+        title: 日本語と英語を切り替え
+        body: ヘッダーのボタン 1 つで、ページの表示を日本語と英語で切り替えられます。選んだ言語はブラウザに保存されます。
+screenshots:
+  - name: launcher
+    file: launcher.webp
+    alt:
+      en: "Home page in Japanese listing the Project's installed apps as cards in three columns: AI Gateway with a Needs attention badge, Builder Console, Contacts, Directory, Embedding, Internal Tool Builder, Knowledge, LLM, Memo and Peer Bonus, under a search box."
+      ja: "日本語表示の Home。検索欄の下に、注意の印が付いた AI Gateway、Builder Console、Contacts、Directory、Embedding、社内ツールビルダー、Knowledge、LLM、Memo、Peer Bonus のカードが 3 列で並んでいます。"
+  - name: search
+    file: search.webp
+    alt:
+      en: "Search box containing “Project” with the cards narrowed to the five matching apps: AI Gateway, Builder Console, Embedding, Internal Tool Builder and LLM."
+      ja: "検索欄に「Project」と入力し、一致する AI Gateway、Builder Console、Embedding、社内ツールビルダー、LLM の 5 つのカードに絞り込まれた画面。"
+  - name: app-switcher
+    file: app-switcher.webp
+    alt:
+      en: "The app switcher menu open from the header, titled Apps in this project, with Home marked as currently shown followed by AI Gateway, Builder Console, Contacts, Directory, Embedding, Internal Tool Builder and Knowledge."
+      ja: "ヘッダーから開いたアプリ切り替え。「このプロジェクトのアプリ」の見出しの下に、表示中のホームに続いて AI Gateway、Builder Console、Contacts、Directory、Embedding、社内ツールビルダー、Knowledge が並んでいます。"
+  - name: mobile
+    file: mobile.webp
+    alt:
+      en: "Home at phone width in Japanese: the Manage apps link and search box above app cards stacked in one column, starting with AI Gateway, Builder Console and Contacts."
+      ja: "スマートフォン幅で表示した日本語の Home。「アプリを管理」のリンクと検索欄の下に、AI Gateway、Builder Console、Contacts のカードが 1 列に並んでいます。"
+  - name: english
+    file: english.webp
+    alt:
+      en: "The same Home page in English, titled Apps installed in addon-console-proof, with Open links on each card and a 日本語 button in the header to switch back."
+      ja: "英語表示に切り替えた Home。「Apps installed in addon-console-proof」の見出しで、各カードに Open のリンクがあり、ヘッダーには日本語に戻すボタンがあります。"
