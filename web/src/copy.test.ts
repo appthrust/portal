@@ -21,8 +21,8 @@ describe('portal wording', () => {
     }
   })
 
-  test('Japanese says プロジェクト and keeps English only for product names', () => {
-    const allowed = /Markdown|KB|English/g
+  test('Japanese says プロジェクト and keeps English only for product names and AI', () => {
+    const allowed = /Markdown|KB|English|AI/g
     for (const [id, message] of messages) {
       const ja = (message.translations.ja ?? '').replace(allowed, '').replace(/\{\w+\}/g, '')
       expect(ja, id).not.toMatch(/[A-Za-z]{2,}/)

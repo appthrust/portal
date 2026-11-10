@@ -5,8 +5,8 @@
     "": {
       "name": "@appthrust/portal",
       "dependencies": {
-        "@appthrust/app-launcher": "^0.1.2",
-        "@appthrust/platform-dashboard-i18n": "^0.1.2",
+        "@appthrust/app-launcher": "^0.1.3",
+        "@appthrust/platform-dashboard-i18n": "^0.1.3",
         "@tanstack/react-query": "^5.90.21",
         "@tanstack/react-store": "^0.11.2",
         "dompurify": "^3.4.15",
@@ -29,9 +29,9 @@
     },
   },
   "packages": {
-    "@appthrust/app-launcher": ["@appthrust/app-launcher@0.1.2", "https://npm.pkg.github.com/download/@appthrust/app-launcher/0.1.2/6460f3aecf789a1551a0499728b79d2f62c1ffc8", { "dependencies": { "@appthrust/platform-dashboard-i18n": "0.1.1", "@tanstack/react-query": "^5.90.21", "lucide-react": "^0.563.0", "radix-ui": "^1.4.3", "zod": "^4.3.6" }, "peerDependencies": { "react": "^19.2.4" } }, "sha512-DJrMlals9yUaZa+PgaogbwgvgmpPE8CjrH5Za72xogLqehqaSVN4Vg1/CJiXEotrYqXn8ueRlJXnn7QvhdVfxg=="],
+    "@appthrust/app-launcher": ["@appthrust/app-launcher@0.1.3", "https://npm.pkg.github.com/download/@appthrust/app-launcher/0.1.3/9a3f78a33921ecd18bec1dd65701478f85209b6d", { "dependencies": { "@appthrust/platform-dashboard-i18n": "0.1.1", "@tanstack/react-query": "^5.90.21", "lucide-react": "^0.563.0", "radix-ui": "^1.4.3", "zod": "^4.3.6" }, "peerDependencies": { "react": "^19.2.4" } }, "sha512-V5LpjCwr50lDG+UxSYMYG+IRfOQ71uAJIEwMwwVML6RI1MnOqCimjiek6y0YQIywTwYkJsLZQyGEJeZ4sHyWkg=="],
 
-    "@appthrust/platform-dashboard-i18n": ["@appthrust/platform-dashboard-i18n@0.1.2", "https://npm.pkg.github.com/download/@appthrust/platform-dashboard-i18n/0.1.2/d8c005ce67a89ea466dffc0dcec957f90d2dfb8a", { "peerDependencies": { "react": "^19.2.4" } }, "sha512-UBgktNu/3i4MovoIjMuoyAYUOUDSBN3/yRtUBJQaBmCnVsYn9BeoC+Pk3X10p7WFN8utCq3d0HRz8eeoBZpHGg=="],
+    "@appthrust/platform-dashboard-i18n": ["@appthrust/platform-dashboard-i18n@0.1.3", "https://npm.pkg.github.com/download/@appthrust/platform-dashboard-i18n/0.1.3/76b13de5dbed049dab202a86c26069438dbd4310", { "peerDependencies": { "react": "^19.2.4" } }, "sha512-oAw2sqFTb8VbHBz7q2PW32P2DYQlz/0NkRc+0gT0FLQ8ZnJRbQWNSZY60ktXmT/L0xbpxCqGVrXleDUGCxNa1w=="],
 
     "@asamuzakjp/css-color": ["@asamuzakjp/css-color@7.2.0", "", { "dependencies": { "@csstools/css-calc": "^3.4.3", "@csstools/css-color-parser": "^4.2.7", "@csstools/css-parser-algorithms": "^4.0.2", "@csstools/css-tokenizer": "^4.0.2", "lru-cache": "^11.5.3" } }, "sha512-+JNLVlzePs1XiBT5s9aVkEjOePRoB//tk3bc69BGdzQCz7EICVSQuVPZu6tjc7vAJxBx5fama67LbOltwnXzPQ=="],
 
