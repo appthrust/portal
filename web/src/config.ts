@@ -1,5 +1,5 @@
 // `GET /config` from cmd/portal-server: the project this portal belongs to, its
-// own public URL, and the Dashboard's Marketplace (the empty grid links there).
+// own public URL, and the Dashboard's Marketplace (the アプリ block's "manage apps" link).
 import { queryOptions } from '@tanstack/react-query'
 
 export type PortalConfig = { projectId: string; publicUrl: string; dashboardUrl: string }

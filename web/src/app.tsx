@@ -1,23 +1,27 @@
-// The portal's single page: one search box, every installed app of the
-// project as a card (LauncherGrid), then the apps every `launcher.entries/v1`
-// provider lists for this viewer (HomeApps), under a header carrying the same
-// app switcher every installed app shows. No router: the page has one URL and reads
-// `/config`, `/launcher` and `/api/portal/v1/home`; the Project display name
-// comes with `/launcher`.
-import { AppSwitcher, LauncherGrid, projectDisplayName, useLauncher, type LauncherProject } from '@appthrust/app-launcher'
+// The portal: an intranet home under a header carrying the same app switcher
+// every installed app shows. Routes (src/router.tsx): `/` home,
+// `/announcements` all announcements, `/announcements/<id>` one, plus the
+// poster's editor. The home reads, top to bottom: greeting (`/me`) with
+// today's date and the app search box, お知らせ, アプリ (installed apps from
+// `/api/portal/v1/home`), then the `launcher.entries/v1` provider sections.
+// The Project display name comes with `/launcher`.
+import { AppSwitcher, projectDisplayName, useLauncher, type LauncherProject } from '@appthrust/app-launcher'
 import { useQuery } from '@tanstack/react-query'
-import { ExternalLink, House, Languages, Search } from 'lucide-react'
-import { useId, useState, type ReactNode } from 'react'
+import { House, Languages, Search } from 'lucide-react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { AnnouncementEditor } from './announcement-editor'
+import { AnnouncementDetail, AnnouncementsBlock, AnnouncementsPage } from './announcement-views'
+import { failureOf, useMe } from './announcements'
 import { configQuery, type PortalConfig } from './config'
+import { dayPart, formatToday, localDateValue } from './format'
 import { useDebouncedValue, useHome } from './home'
 import { HomeApps } from './home-apps'
 import { setLanguage, useText } from './i18n'
+import { Link, matchRoute, paths, usePathname, type Route } from './router'
+import { BackLink, BUTTON_GHOST, useDocumentTitle } from './ui'
 
 /** The server rejects longer searches (`invalid_query`). */
 const SEARCH_MAX_LENGTH = 128
-
-const HEADER_BUTTON =
-  'inline-flex min-h-10 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900 md:min-h-9 [&_svg]:size-4 [&_svg]:shrink-0'
 
 /** `project` is known once `/launcher` answers; until then the header shows no project at all (never the raw id). */
 function Shell({ project, children }: { project?: LauncherProject; children: ReactNode }) {
@@ -34,10 +38,12 @@ function Shell({ project, children }: { project?: LauncherProject; children: Rea
       <header className="sticky top-0 z-10 border-b border-stone-200 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/80">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-2 px-3 sm:px-6">
           <span className="flex min-w-0 items-center gap-2.5">
-            <span aria-hidden className="grid size-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
-              <House className="size-4" />
-            </span>
-            <span className="shrink-0 text-[15px] font-semibold tracking-tight text-stone-900">{t('portal.title')}</span>
+            <Link to={paths.home} className="flex shrink-0 items-center gap-2.5 rounded-md">
+              <span aria-hidden className="grid size-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                <House className="size-4" />
+              </span>
+              <span className="text-[15px] font-semibold tracking-tight text-stone-900">{t('portal.title')}</span>
+            </Link>
             {project ? (
               <>
                 <span aria-hidden className="shrink-0 text-stone-300">
@@ -54,7 +60,7 @@ function Shell({ project, children }: { project?: LauncherProject; children: Rea
             <AppSwitcher language={language} />
             <button
               type="button"
-              className={HEADER_BUTTON}
+              className={BUTTON_GHOST}
               aria-label={`${t('portal.language')}: ${t(`portal.language.${other}`)}`}
               onClick={() => setLanguage(other)}
             >
@@ -73,31 +79,22 @@ function Shell({ project, children }: { project?: LauncherProject; children: Rea
   )
 }
 
-/** The page once `/config` is known; exported as the test seam for composition. */
-export function PortalPage({ config }: { config: PortalConfig }) {
+function Greeting({ name, now, search, onSearch }: { name: string | undefined; now: Date; search: string; onSearch: (value: string) => void }) {
   const { t, language } = useText()
-  const launcher = useLauncher()
-  const project = launcher.status === 'ready' ? launcher.project : undefined
   const searchId = useId()
-  const [search, setSearch] = useState('')
-  // Installed app cards filter as you type; the app sections re-query once typing pauses.
-  const q = useDebouncedValue(search.trim())
-  const home = useHome(q)
+  const part = dayPart(now)
+  const greeting = name?.trim() ? t(`portal.greeting.${part}`, { name: name.trim() }) : t(`portal.greeting.${part}.anonymous`)
   return (
-    <Shell project={project}>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight text-stone-900">{t('portal.title')}</h1>
-          <p className="mt-1 text-stone-500">
-            {project ? t('portal.subtitle.project', { name: projectDisplayName(project) }) : t('portal.subtitle')}
-          </p>
-        </div>
-        <a href={config.dashboardUrl} className={`${HEADER_BUTTON} -mx-2.5`}>
-          {t('portal.manage')}
-          <ExternalLink aria-hidden />
-        </a>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        <p className="text-sm text-stone-500">
+          <time dateTime={localDateValue(now)}>{formatToday(language, now)}</time>
+        </p>
+        <h1 data-portal-greeting="" className="mt-1 text-xl leading-tight font-semibold tracking-tight text-pretty text-stone-900 sm:text-2xl">
+          {greeting}
+        </h1>
       </div>
-      <div role="search" className="relative mb-6">
+      <div role="search" className="relative w-full sm:w-72 sm:shrink-0">
         <label htmlFor={searchId} className="sr-only">
           {t('portal.search.label')}
         </label>
@@ -106,7 +103,7 @@ export function PortalPage({ config }: { config: PortalConfig }) {
           id={searchId}
           type="search"
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => onSearch(event.target.value)}
           maxLength={SEARCH_MAX_LENGTH}
           placeholder={t('portal.search.placeholder')}
           autoComplete="off"
@@ -115,8 +112,55 @@ export function PortalPage({ config }: { config: PortalConfig }) {
           className="h-11 w-full rounded-lg border border-stone-300 bg-white pr-3 pl-9 text-base text-stone-900 shadow-xs placeholder:text-stone-400 focus-visible:border-sky-600 focus-visible:outline-offset-0 sm:text-sm"
         />
       </div>
-      <LauncherGrid dashboardUrl={config.dashboardUrl} language={language} search={search} />
-      <HomeApps state={home.state} stale={home.stale} search={q} onRetry={home.refetch} />
+    </div>
+  )
+}
+
+function HomePage({ config, name, canPost, now }: { config: PortalConfig; name: string | undefined; canPost: boolean; now: Date }) {
+  const { t } = useText()
+  useDocumentTitle(t('portal.title'))
+  const [search, setSearch] = useState('')
+  // App tiles filter as you type; the provider sections re-query once typing pauses.
+  const q = useDebouncedValue(search.trim())
+  const home = useHome(q)
+  return (
+    <>
+      <Greeting name={name} now={now} search={search} onSearch={setSearch} />
+      <AnnouncementsBlock canPost={canPost} now={now} />
+      <HomeApps state={home.state} stale={home.stale} search={search} q={q} dashboardUrl={config.dashboardUrl} onRetry={home.refetch} />
+    </>
+  )
+}
+
+function NotFoundPage() {
+  const { t } = useText()
+  useDocumentTitle(t('portal.notFound.title'), t('portal.title'))
+  return (
+    <div>
+      <BackLink to={paths.home}>{t('portal.backHome')}</BackLink>
+      <h1 className="text-xl font-semibold tracking-tight text-stone-900">{t('portal.notFound.title')}</h1>
+      <p className="mt-2 text-stone-600">{t('portal.notFound.body')}</p>
+    </div>
+  )
+}
+
+/** The page once `/config` is known; exported as the test seam for composition. */
+export function PortalPage({ config, route }: { config: PortalConfig; route: Route }) {
+  const launcher = useLauncher()
+  const project = launcher.status === 'ready' ? launcher.project : undefined
+  const me = useMe()
+  // Unknown until `/me` answers; a failed `/me` (store not ready, network) means "cannot post".
+  const canPost = me.data ? me.data.canPost : me.isError ? false : undefined
+  const storeUnavailable = !me.data && me.isError && failureOf(me.error).kind === 'storeUnavailable'
+  const now = new Date()
+  return (
+    <Shell project={project}>
+      {route.name === 'home' ? <HomePage config={config} name={me.data?.name} canPost={canPost === true} now={now} /> : null}
+      {route.name === 'announcements' ? <AnnouncementsPage canPost={canPost} now={now} /> : null}
+      {route.name === 'announcement' ? <AnnouncementDetail id={route.id} canPost={canPost === true} /> : null}
+      {route.name === 'newAnnouncement' ? <AnnouncementEditor canPost={canPost} storeUnavailable={storeUnavailable} /> : null}
+      {route.name === 'editAnnouncement' ? <AnnouncementEditor id={route.id} canPost={canPost} storeUnavailable={storeUnavailable} /> : null}
+      {route.name === 'notFound' ? <NotFoundPage /> : null}
     </Shell>
   )
 }
@@ -124,7 +168,15 @@ export function PortalPage({ config }: { config: PortalConfig }) {
 export function App() {
   const { t } = useText()
   const config = useQuery(configQuery)
-  if (config.data) return <PortalPage config={config.data} />
+  const pathname = usePathname()
+  // After an in-app navigation, move focus to the new page so screen readers start there; the first load keeps the browser's focus.
+  const lastPath = useRef(pathname)
+  useEffect(() => {
+    if (lastPath.current === pathname) return
+    lastPath.current = pathname
+    document.getElementById('main')?.focus()
+  }, [pathname])
+  if (config.data) return <PortalPage config={config.data} route={matchRoute(pathname)} />
   return (
     <Shell>
       {config.isError ? (

@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/appthrust/appserver-go/appserver/identity"
 	"github.com/appthrust/appserver-go/appserver/platformenv"
 )
 
@@ -32,7 +33,13 @@ func main() {
 	if err := platformenv.ValidateIdentityListen(*listen, platform.OIDCIssuer); err != nil {
 		log.Fatal(err)
 	}
-	handler, err := newHandler(*staticDir, platform.APIURL, platform.ProjectID, nil, nil, nil)
+	auth, err := identity.New(identity.FromEnv("PORTAL"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	notices, closeStore := announcementsHandler(platform.APIURL, platform.ProjectID, auth)
+	defer closeStore()
+	handler, err := newHandler(*staticDir, platform.APIURL, platform.ProjectID, auth, nil, nil, notices)
 	if err != nil {
 		log.Fatal(err)
 	}

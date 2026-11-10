@@ -100,8 +100,9 @@ Errors: `400 invalid`, `401 unauthenticated`, `403 forbidden`, `404 not_found`,
 `503 identity_unavailable`, `503 portal_store_unavailable`. JSON bodies are at
 most 64 KiB and must be `application/json`.
 
-The author's display name is the token's `name` claim, falling back to the
-subject. Portal does not depend on Directory.
+The author is whoever created the announcement: the token's `name` claim,
+falling back to the subject, snapshotted at creation. An edit keeps the author
+and moves only `updatedAt`. Portal does not depend on Directory.
 
 ## Server layout
 
@@ -135,7 +136,8 @@ announcement block shows that announcements are not available yet.
 
 One page, Japanese by default (`appthrust-language` cookie, as today), English
 complete. Routes: `/` home, `/announcements` all announcements,
-`/announcements/<id>` one announcement. The server already answers every
+`/announcements/<id>` one announcement, `/announcements/new` and
+`/announcements/<id>/edit` the editor. The server already answers every
 non-asset path with the SPA.
 
 Home, top to bottom:
@@ -150,7 +152,9 @@ Home, top to bottom:
    localized title, localized tagline. Text comes from
    `builtinApps[].locales[language]`; a field the catalog does not localize
    falls back to `name`/`description`. No hostname. An app that is not
-   `Ready` keeps a status badge in the viewer's language.
+   `Ready` keeps a status badge in the viewer's language. The read model's
+   phase set is open: `Pending` and any phase Portal does not know render as
+   準備中 and never fail the page.
 5. Provider sections (自分のアプリ / 部署のアプリ / 社内のアプリ), unchanged in
    behaviour.
 
@@ -160,9 +164,9 @@ with preview), pinned, publish time and optional end time. Posters reach
 labelled with its state. Markdown is rendered with `marked` and sanitized with
 `dompurify`, as Memo and AppThrust News do.
 
-`@appthrust/app-launcher`'s `LauncherGrid` is no longer used; `AppSwitcher`
-and `iconFor` still are. The installed-app tiles read `GET /api/portal/v1/home`
-(`builtinApps`), which carries `locales`.
+`@appthrust/app-launcher`'s `LauncherGrid` and its strict `Entry` schema are no
+longer used; `AppSwitcher` and `iconFor` still are. The installed-app tiles
+read `GET /api/portal/v1/home` (`builtinApps`), which carries `locales`.
 
 ## Verification
 
