@@ -10,6 +10,8 @@ spec:
     - openid
     - profile
     - email
+    tokenClaims:
+    - groups
   components:
   - defaultValues:
       livenessProbePath: /healthz
