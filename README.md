@@ -22,7 +22,7 @@ Imported from `appthrust/platform` commit
 
 The public Go SDK is `github.com/appthrust/appserver-go v0.5.1`; no platform checkout,
 module replacement, or private Go credential is required. The launcher and i18n
-packages use the published `^0.1.3` GitHub Packages versions rather than workspace
+packages use the published `^0.1.4` GitHub Packages versions rather than workspace
 packages. Tailwind scans the installed launcher package for its classes.
 
 ## Develop
