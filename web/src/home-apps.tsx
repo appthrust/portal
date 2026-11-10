@@ -1,20 +1,23 @@
 // The apps part of the home. **アプリ**: every installed app except Portal as a
-// compact tile in the viewer's language (catalog `locales`, falling back to
-// the served name/description). Then the employee-portal sections: one quiet
-// line per provider that could not answer, then the sections exactly as the
-// server ordered them (owner → group → project). Providers decide what a
-// viewer sees and how it opens (employee-portal.md §3.5); this file only
-// renders it.
+// launcher tile (large icon on a per-app colour, title, one-line tagline) in
+// the viewer's language (catalog `locales`, falling back to the served
+// name/description), grouped by purpose; the build-and-manage group starts
+// collapsed. Then the employee-portal sections: one quiet line per provider
+// that could not answer, then the sections exactly as the server ordered them
+// (owner → group → project). Providers decide what a viewer sees and how it
+// opens (employee-portal.md §3.5); this file only renders it.
 import { iconFor } from '@appthrust/app-launcher'
 import type { DashboardLanguage } from '@appthrust/platform-dashboard-i18n'
-import { ArrowUpRight, CircleAlert, Lock } from 'lucide-react'
-import { useId } from 'react'
+import { ArrowUpRight, ChevronRight, CircleAlert, Lock } from 'lucide-react'
+import { useId, useState } from 'react'
 import {
+  groupInstalledApps,
   installedAppText,
   isNavigable,
   matchesInstalledApp,
   tileApps,
   type AppEntry,
+  type AppGroup,
   type HomeResponse,
   type HomeSection,
   type HomeState,
@@ -92,9 +95,61 @@ function InstalledApps({ apps, search, t, language }: { apps: InstalledApp[]; se
       </p>
     )
   }
+  const groups = groupInstalledApps(matching)
+  if (groups.length === 1) return <TileGrid apps={groups[0].apps} t={t} language={language} />
+  const searching = search.trim() !== ''
   return (
-    <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3">
-      {matching.map((app) => (
+    <div className="space-y-5">
+      {groups.map((group) => (
+        <AppGroupBlock key={group.id} group={group} searching={searching} t={t} language={language} />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * One purpose group under its heading. A collapsed group is a disclosure (button in the
+ * heading, with the app count) that starts closed; a search shows it open without the toggle.
+ */
+function AppGroupBlock({ group, searching, t, language }: { group: AppGroup; searching: boolean; t: Translate; language: DashboardLanguage }) {
+  const listId = useId()
+  const [expanded, setExpanded] = useState(false)
+  const title = t(`portal.apps.group.${group.id}`)
+  const toggleable = group.collapsed && !searching
+  const count = group.collapsed ? (
+    <span className="rounded-full bg-stone-200/70 px-1.5 py-0.5 text-xs leading-4 font-medium text-stone-600 tabular-nums">{group.apps.length}</span>
+  ) : null
+  return (
+    <div data-portal-app-group={group.id}>
+      <h3 className="mb-1.5 flex min-h-8 items-center gap-1.5 text-sm font-medium text-stone-600">
+        {toggleable ? (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-controls={listId}
+            onClick={() => setExpanded((open) => !open)}
+            className="-ml-2 inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 hover:bg-stone-100 hover:text-stone-900 md:min-h-8"
+          >
+            <ChevronRight aria-hidden className={`size-4 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+            {title}
+            {count}
+          </button>
+        ) : (
+          <>
+            {title}
+            {count}
+          </>
+        )}
+      </h3>
+      <TileGrid id={listId} hidden={toggleable && !expanded} apps={group.apps} t={t} language={language} />
+    </div>
+  )
+}
+
+function TileGrid({ id, hidden, apps, t, language }: { id?: string; hidden?: boolean; apps: InstalledApp[]; t: Translate; language: DashboardLanguage }) {
+  return (
+    <ul id={id} hidden={hidden} className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4">
+      {apps.map((app) => (
         <li key={app.definitionId} className="flex min-w-0">
           <AppTile app={app} t={t} language={language} />
         </li>
@@ -103,7 +158,28 @@ function InstalledApps({ apps, search, t, language }: { apps: InstalledApp[]; se
   )
 }
 
-const TILE = 'flex w-full min-w-0 items-start gap-3 rounded-xl border border-stone-200 bg-white px-3 py-3 text-stone-900'
+const TILE = 'flex w-full min-w-0 flex-col items-center rounded-xl border border-stone-200 bg-white px-3 pt-4 pb-3 text-center text-stone-900'
+
+// Solid -600/-700 shades that keep a white glyph at 3:1 or more, in hues far enough apart to tell tiles apart.
+const TILE_TONES = [
+  'bg-blue-600',
+  'bg-violet-600',
+  'bg-emerald-600',
+  'bg-rose-600',
+  'bg-orange-600',
+  'bg-cyan-600',
+  'bg-fuchsia-600',
+  'bg-lime-700',
+  'bg-slate-600',
+  'bg-amber-600',
+] as const
+
+/** The app's tile colour: a djb2 hash of its definition id, so it never changes between visits or viewers. */
+function toneOf(definitionId: string): string {
+  let hash = 5381
+  for (const char of definitionId) hash = (Math.imul(hash, 33) + (char.codePointAt(0) ?? 0)) >>> 0
+  return TILE_TONES[hash % TILE_TONES.length]
+}
 
 const PHASE_BADGE: Record<Exclude<InstalledApp['phase'], 'Ready'>, string> = {
   Pending: 'border-sky-200 bg-sky-50 text-sky-800',
@@ -113,37 +189,35 @@ const PHASE_BADGE: Record<Exclude<InstalledApp['phase'], 'Ready'>, string> = {
   Uninstalling: 'border-stone-200 bg-stone-100 text-stone-600',
 }
 
-// One box per app: icon, localized title (with a status badge when the app is not Ready), one-line tagline. No hostname.
+// One launcher tile: large icon on the app's colour, localized title, tagline clamped to one line
+// (the whole tagline stays in the text for screen readers and is the tooltip), and a status badge
+// when the app is not Ready. No hostname.
 function AppTile({ app, t, language }: { app: InstalledApp; t: Translate; language: DashboardLanguage }) {
   const Icon = iconFor(app.icon)
   const { title, tagline } = installedAppText(app, language)
   const content = (
     <>
-      <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-sm">
-        <Icon className="size-5" />
+      <span aria-hidden className={`grid size-12 shrink-0 place-items-center rounded-2xl text-white shadow-sm ${toneOf(app.definitionId)}`}>
+        <Icon className="size-6" />
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex min-w-0 items-center gap-2">
-          <span data-portal-app-title="" className="min-w-0 truncate text-[15px] leading-5 font-medium">
-            {title}
-          </span>
-          {app.phase === 'Ready' ? null : (
-            <span data-portal-phase={app.phase} className={`${BADGE} ${PHASE_BADGE[app.phase]}`}>
-              {t(`portal.apps.phase.${app.phase}`)}
-            </span>
-          )}
+      <span data-portal-app-title="" className="mt-2.5 block w-full truncate text-sm leading-5 font-medium">
+        {title}
+      </span>
+      {tagline ? (
+        <span data-portal-app-tagline="" className="mt-0.5 block w-full truncate text-xs leading-4 text-stone-500">
+          {tagline}
         </span>
-        {tagline ? (
-          <span data-portal-app-tagline="" className="mt-0.5 line-clamp-2 block text-xs leading-5 text-stone-500">
-            {tagline}
-          </span>
-        ) : null}
-      </span>
+      ) : null}
+      {app.phase === 'Ready' ? null : (
+        <span data-portal-phase={app.phase} className={`${BADGE} mt-2 ${PHASE_BADGE[app.phase]}`}>
+          {t(`portal.apps.phase.${app.phase}`)}
+        </span>
+      )}
     </>
   )
   if (!isNavigable(app)) {
     return (
-      <div aria-disabled="true" data-portal-app={app.definitionId} className={`${TILE} cursor-not-allowed opacity-60`}>
+      <div aria-disabled="true" data-portal-app={app.definitionId} title={tagline || undefined} className={`${TILE} cursor-not-allowed opacity-60`}>
         {content}
       </div>
     )
@@ -152,6 +226,7 @@ function AppTile({ app, t, language }: { app: InstalledApp; t: Translate; langua
     <a
       href={app.url}
       data-portal-app={app.definitionId}
+      title={tagline || undefined}
       className={`${TILE} shadow-xs transition-[border-color,box-shadow] hover:border-stone-300 hover:shadow-md`}
     >
       {content}
@@ -226,8 +301,8 @@ function AppSection({ section, t }: { section: HomeSection; t: Translate }) {
   )
 }
 
-// Same anatomy as the installed app cards (one box, icon tile, two-line description,
-// footer row) with a lighter tile, so apps read as a different kind of thing.
+// A provider entry as a card: icon tile, name, two-line description, tags and a
+// footer row with its state and the open link.
 function AppCard({ entry, t }: { entry: AppEntry; t: Translate }) {
   const Icon = iconFor(entry.icon)
   const openUrl = entry.state === 'ready' ? entry.url : undefined

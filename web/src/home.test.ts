@@ -5,6 +5,7 @@ import {
   SEARCH_DEBOUNCE_MS,
   createDebouncer,
   fetchHome,
+  groupInstalledApps,
   homePath,
   homeQueryKey,
   homeRetryLimit,
@@ -15,6 +16,7 @@ import {
   parseHome,
   shouldRetryHome,
   tileApps,
+  type AppGroupId,
   type HomeFetch,
   type HomeState,
   type InstalledApp,
@@ -177,7 +179,9 @@ describe('installed app locales', () => {
 
   test('a Pending app or a phase Portal does not know parses as Pending instead of failing the home', () => {
     expect(parseHome(wireApp({ phase: 'Pending' })).installedApps[0].phase).toBe('Pending')
-    expect(parseHome(wireApp({ phase: 'Migrating' })).installedApps[0].phase).toBe('Pending')
+    expect(parseHome(wireApp({ phase: 'UpdateAvailable' })).installedApps[0].phase).toBe('Ready')
+    expect(parseHome(wireApp({ phase: 'NeedsConfiguration' })).installedApps[0].phase).toBe('Degraded')
+    expect(parseHome(wireApp({ phase: 'Migrating' })).installedApps[0].phase).toBe('Ready')
     expect(parseHome(wireApp({ phase: 'Degraded', dependencyOf: 'builder-console' })).installedApps[0]).toMatchObject({ phase: 'Degraded', dependencyOf: 'builder-console' })
   })
 
@@ -204,6 +208,59 @@ describe('installed app locales', () => {
     expect(apps.find((app) => app.definitionId === 'knowledge')?.locales).toEqual({ ja: { tagline: expect.any(String) } })
     expect(apps.find((app) => app.definitionId === 'memo')).not.toHaveProperty('locales')
     expect(apps.find((app) => app.definitionId === 'llm')?.phase).toBe('Pending')
+  })
+
+  test('the mock home seeds every purpose group and one app without a category', () => {
+    const apps = tileApps(parseHome(mockHomeBody()).installedApps)
+    expect(groupInstalledApps(apps).map((group) => group.id)).toEqual(['everyday', 'ai', 'manage'])
+    expect(apps.filter((app) => app.category === undefined).map((app) => app.definitionId)).toEqual(['vision'])
+  })
+})
+
+describe('app groups', () => {
+  test('the parser keeps a catalog category; absent, blank or non-string reads as none', () => {
+    expect(parseHome(wireApp({ category: 'collaborate' })).installedApps[0].category).toBe('collaborate')
+    for (const category of [undefined, null, '', '  ', 3, { id: 'assist' }]) {
+      expect(parseHome(wireApp({ category })).installedApps[0]).not.toHaveProperty('category')
+    }
+  })
+
+  const ids = (apps: InstalledApp[]) => groupInstalledApps(apps).map((group) => [group.id, group.collapsed, group.apps.map((app) => app.definitionId)])
+
+  test('each category lands in its group; any other category or none is build and manage, collapsed', () => {
+    const cases: Array<[string | undefined, AppGroupId]> = [
+      ['collaborate', 'everyday'],
+      ['assist', 'ai'],
+      ['build', 'manage'],
+      ['develop', 'manage'],
+      ['observe', 'manage'],
+      ['toString', 'manage'],
+      [undefined, 'manage'],
+    ]
+    for (const [category, group] of cases) {
+      expect(groupInstalledApps([installed('x', { category })])[0].id, String(category)).toBe(group)
+    }
+  })
+
+  test('groups come in page order with server order inside; empty groups are left out', () => {
+    const apps = [
+      installed('tool-builder', { category: 'develop' }),
+      installed('directory', { category: 'collaborate' }),
+      installed('vision'),
+      installed('memo', { category: 'collaborate' }),
+      installed('llm', { category: 'assist' }),
+    ]
+    expect(ids(apps)).toEqual([
+      ['everyday', false, ['directory', 'memo']],
+      ['ai', false, ['llm']],
+      ['manage', true, ['tool-builder', 'vision']],
+    ])
+    expect(ids(apps.filter((app) => app.category !== 'assist')).map(([id]) => id)).toEqual(['everyday', 'manage'])
+  })
+
+  test('one group with apps is one group; no apps is no group', () => {
+    expect(ids([installed('llm', { category: 'assist' }), installed('knowledge', { category: 'assist' })])).toEqual([['ai', false, ['llm', 'knowledge']]])
+    expect(ids([])).toEqual([])
   })
 })
 

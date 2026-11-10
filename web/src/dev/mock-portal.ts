@@ -1,7 +1,8 @@
 // Dev-only portal contract (design/README.md "API"), in memory:
 // `GET /config` as cmd/server answers it, `GET /launcher` from the shared
 // fixture (@appthrust/app-launcher), `GET /api/portal/v1/home?q=` composed
-// from that fixture (with catalog `locales` on some apps) plus Launch Entries
+// from that fixture (with catalog `locales` on some apps and a catalog
+// category on all but one, covering every purpose group) plus Launch Entries
 // one provider (Builder Console) made for the viewer, with a second provider
 // (Internal Tool Builder) down, and every announcement route with read marks
 // per viewer. `role` switches between a poster (Admin/Editor) and a plain
@@ -52,10 +53,25 @@ const LOCALES: Record<string, Record<string, AppLocale>> = {
   knowledge: { ja: { tagline: 'Notion や esa、手元の資料をまとめて検索し、質問できます。' } },
 }
 
-// The launcher fixture plus an app the Platform read model still reports as `Pending` (observed for `llm`);
-// it is not in `/launcher`, whose shared schema does not know that phase.
+// Catalog category ids as the catalog publishes them; Vision (below) has none.
+const APP_CATEGORIES: Record<string, string> = {
+  'builder-console': 'build',
+  directory: 'collaborate',
+  portal: 'collaborate',
+  'tool-builder': 'develop',
+  knowledge: 'assist',
+  memo: 'collaborate',
+}
+
+// The launcher fixture plus apps it does not carry: one the Platform read model still reports as
+// `Pending` (observed for `llm`; the shared `/launcher` schema does not know that phase), Peer Bonus,
+// and Vision without a catalog category.
 export const mockInstalledApps: InstalledApp[] = [
-  ...launcherEntries.map((entry) => (LOCALES[entry.definitionId] ? { ...entry, locales: LOCALES[entry.definitionId] } : entry)),
+  ...launcherEntries.map((entry) => ({
+    ...entry,
+    category: APP_CATEGORIES[entry.definitionId],
+    ...(LOCALES[entry.definitionId] ? { locales: LOCALES[entry.definitionId] } : {}),
+  })),
   {
     definitionId: 'llm',
     name: 'LLM Gateway',
@@ -64,7 +80,32 @@ export const mockInstalledApps: InstalledApp[] = [
     url: 'https://llm.pj-mock.appthrust.ink',
     phase: 'Pending',
     current: false,
+    category: 'assist',
     locales: { ja: { title: 'LLM ゲートウェイ', tagline: 'このプロジェクトで使える言語モデルを、ひとつの窓口から呼び出せます。' } },
+  },
+  {
+    definitionId: 'peerbonus',
+    name: 'Peer Bonus',
+    description: 'Thank a colleague with a few points and a message.',
+    icon: 'peerbonus',
+    url: 'https://peerbonus.pj-mock.appthrust.ink',
+    phase: 'Ready',
+    current: false,
+    category: 'collaborate',
+    locales: {
+      ja: { title: 'ピアボーナス', tagline: '同僚への感謝を、ポイントとメッセージで送れます。' },
+      en: { title: 'Peer Bonus', tagline: 'Thank a colleague with a few points and a message.' },
+    },
+  },
+  {
+    definitionId: 'vision',
+    name: 'Vision',
+    description: 'Read text and tables from scanned documents.',
+    icon: 'vision',
+    url: 'https://vision.pj-mock.appthrust.ink',
+    phase: 'Ready',
+    current: false,
+    locales: { ja: { title: 'ビジョン', tagline: 'スキャンした書類から文字や表を読み取ります。' } },
   },
 ]
 

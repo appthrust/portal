@@ -20,9 +20,9 @@ Imported from `appthrust/platform` commit
 - `dashboard/packages/portal/` → `web/`, including the SPA, development mock, and tests.
 - Neither source directory contained a README at the imported revision.
 
-The public Go SDK is `github.com/appthrust/appserver-go v0.3.0`; no platform checkout,
+The public Go SDK is `github.com/appthrust/appserver-go v0.4.0`; no platform checkout,
 module replacement, or private Go credential is required. The launcher and i18n
-packages use the published `^0.1.0` GitHub Packages versions rather than workspace
+packages use the published `^0.1.3` GitHub Packages versions rather than workspace
 packages. Tailwind scans the installed launcher package for its classes.
 
 ## Develop

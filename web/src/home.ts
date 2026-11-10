@@ -35,11 +35,16 @@ export type SourceState = { definitionId: string; state: 'ready' | 'absent' | 'u
 /** Catalog display text for one language; a field the catalog does not localize is absent. */
 export type AppLocale = { title?: string; tagline?: string }
 /**
- * An installed app's phase from the Platform read model. `Pending` is reported before installation
- * starts; the read model may add phases later, and any phase Portal does not know reads as `Pending`.
+ * An installed app's phase as the tiles show it. The Platform read model reports `Pending`,
+ * `Ready`, `NeedsConfiguration`, `Degraded` and `UpdateAvailable` and may add more:
+ * `NeedsConfiguration` shows as `Degraded`; `UpdateAvailable` and any phase Portal does
+ * not know leave the app usable and show as `Ready`.
  */
 export type InstalledPhase = 'Pending' | 'Installing' | 'Ready' | 'Upgrading' | 'Degraded' | 'Uninstalling'
-/** An installed app: the `/launcher` entry fields plus the catalog's `locales` keyed by language (`ja`, `en`). */
+/**
+ * An installed app: the `/launcher` entry fields plus the catalog's `locales` keyed by language (`ja`, `en`)
+ * and its catalog category id (`collaborate`, `assist`, `build`, …), which may be absent.
+ */
 export type InstalledApp = {
   definitionId: string
   name: string
@@ -50,6 +55,7 @@ export type InstalledApp = {
   current: boolean
   dependencyOf?: string
   locales?: Record<string, AppLocale>
+  category?: string
 }
 
 export type HomeResponse = { project: LauncherProject; installedApps: InstalledApp[]; sections: HomeSection[]; sources: SourceState[] }
@@ -79,6 +85,7 @@ const ENTRY_STATES: readonly string[] = ['ready', 'preparing', 'restricted'] sat
 const RELATIONS: readonly string[] = ['owner', 'group', 'project'] satisfies Relation[]
 const SOURCE_STATES: readonly string[] = ['ready', 'absent', 'unavailable'] satisfies SourceState['state'][]
 const INSTALLED_PHASES: readonly string[] = ['Pending', 'Installing', 'Ready', 'Upgrading', 'Degraded', 'Uninstalling'] satisfies InstalledPhase[]
+const PLATFORM_PHASES: Readonly<Record<string, InstalledPhase>> = { NeedsConfiguration: 'Degraded', UpdateAvailable: 'Ready' }
 
 class InvalidHome extends Error {}
 
@@ -163,16 +170,18 @@ function parseInstalledApp(value: unknown): InstalledApp {
   const phase = text(app.phase)
   const dependencyOf = optionalText(app.dependencyOf)
   const locales = parseLocales(app.locales)
+  const category = typeof app.category === 'string' && app.category.trim() !== '' ? app.category.trim() : undefined
   return {
     definitionId: text(app.definitionId),
     name: text(app.name),
     description: text(app.description),
     icon: text(app.icon),
     url: text(app.url),
-    phase: INSTALLED_PHASES.includes(phase) ? (phase as InstalledPhase) : 'Pending',
+    phase: INSTALLED_PHASES.includes(phase) ? (phase as InstalledPhase) : (PLATFORM_PHASES[phase] ?? 'Ready'),
     current: app.current,
     ...(dependencyOf ? { dependencyOf } : {}),
     ...(locales ? { locales } : {}),
+    ...(category ? { category } : {}),
   }
 }
 
@@ -222,6 +231,31 @@ export function matchesInstalledApp(app: InstalledApp, query: string, language: 
 /** The tiles: every installed app except the page's own (the portal itself), in server order. */
 export function tileApps(apps: readonly InstalledApp[]): InstalledApp[] {
   return apps.filter((app) => !app.current)
+}
+
+/** The purpose groups of the アプリ block, in page order (design/README.md, UI item 4). */
+export type AppGroupId = 'everyday' | 'ai' | 'manage'
+/** One purpose group: its apps in server order; a `collapsed` group starts closed behind a disclosure. */
+export type AppGroup = { id: AppGroupId; collapsed: boolean; apps: InstalledApp[] }
+
+const GROUP_OF_CATEGORY: Readonly<Record<string, AppGroupId>> = { collaborate: 'everyday', assist: 'ai' }
+
+/**
+ * Sorts apps into the purpose groups by catalog category: `collaborate` → everyday work,
+ * `assist` → AI, any other category or none → build and manage (collapsed). Groups keep
+ * page order and server order within; a group with no app is left out.
+ */
+export function groupInstalledApps(apps: readonly InstalledApp[]): AppGroup[] {
+  const groups: AppGroup[] = [
+    { id: 'everyday', collapsed: false, apps: [] },
+    { id: 'ai', collapsed: false, apps: [] },
+    { id: 'manage', collapsed: true, apps: [] },
+  ]
+  for (const app of apps) {
+    const id = app.category !== undefined && Object.hasOwn(GROUP_OF_CATEGORY, app.category) ? GROUP_OF_CATEGORY[app.category] : 'manage'
+    groups.find((group) => group.id === id)?.apps.push(app)
+  }
+  return groups.filter((group) => group.apps.length > 0)
 }
 
 /** One cache entry per search; the key carries `q` exactly as sent (trimmed, blank = no search). */

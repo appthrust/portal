@@ -163,6 +163,8 @@ describe('installed app tiles', () => {
     expect(ja).toMatch(/data-portal-app="memo"[^>]*>.*?Memo<\/span>.*?Write and share Markdown articles\.<\/span>/)
     expect(ja).not.toContain('data-portal-app="portal"')
     expect(ja).not.toContain('directory.pj-test.example.test<')
+    // The tagline is clamped to one line on screen; the whole text is the tooltip.
+    expect(ja).toContain('<a href="https://directory.pj-test.example.test" data-portal-app="directory" title="社員名簿とグループ"')
     const en = render([withApps(), seedMe(mockMember), seedNews(page([]))], <PortalPage config={config} route={HOME} />, 'en')
     expect(en).toMatch(/data-portal-app="directory"[^>]*>.*?Directory<\/span>.*?Everyone in the company\.<\/span>/)
     expect(en).toMatch(/data-portal-app="tool-builder"[^>]*>.*?Internal Tool Builder<\/span>/)
@@ -178,21 +180,21 @@ describe('installed app tiles', () => {
     expect(en).toContain('>Removing</span>')
   })
 
-  test('a home body with a Pending app and with an unknown phase parses and shows the 準備中 / Setting up badge, still openable', () => {
+  test('a Pending app shows the 準備中 / Setting up badge and stays openable; an app with an update available shows no badge', () => {
     const wire = {
       ...mockHomeBody(),
       builtinApps: [
         { ...installed('llm', 'LLM Gateway'), phase: 'Pending' },
-        { ...installed('vision', 'Vision'), phase: 'Migrating' },
+        { ...installed('contacts', 'Contacts'), phase: 'UpdateAvailable' },
       ],
     }
     const home = parseHome(wire)
     const ja = render([seedHome(home), seedMe(mockMember), seedNews(page([]))])
-    for (const id of ['llm', 'vision']) {
-      expect(ja).toMatch(new RegExp(`<a href="https://${id}\\.pj-test\\.example\\.test" data-portal-app="${id}"[^>]*>.*?data-portal-phase="Pending"[^>]*>準備中<`))
-    }
+    expect(ja).toMatch(/<a href="https:\/\/llm\.pj-test\.example\.test" data-portal-app="llm"[^>]*>.*?data-portal-phase="Pending"[^>]*>準備中</)
+    expect(ja).toContain('data-portal-app="contacts"')
+    expect(ja.match(/data-portal-phase=/g)).toHaveLength(1)
     const en = render([seedHome(home), seedMe(mockMember), seedNews(page([]))], <PortalPage config={config} route={HOME} />, 'en')
-    expect(en.match(/data-portal-phase="Pending"[^>]*>Setting up</g)).toHaveLength(2)
+    expect(en.match(/data-portal-phase="Pending"[^>]*>Setting up</g)).toHaveLength(1)
   })
 
   test('the アプリ block links to the Dashboard named by /config', () => {
@@ -203,6 +205,34 @@ describe('installed app tiles', () => {
   test('no other installed app is a quiet line, not an error', () => {
     const html = render([seedHome({ ...mockHome(), installedApps: [apps[0]] }), seedMe(mockMember), seedNews(page([]))])
     expect(html).toContain('インストール済みのアプリはまだありません。')
+  })
+
+  test('tiles are grouped by purpose in page order; build and manage starts collapsed behind a disclosure with its count', () => {
+    const html = renderApps({ status: 'ready', home: mockHome() })
+    expect([...html.matchAll(/data-portal-app-group="(\w+)"/g)].map((match) => match[1])).toEqual(['everyday', 'ai', 'manage'])
+    expect(html).toMatch(/data-portal-app-group="everyday"><h3[^>]*>仕事で使う<\/h3><ul id="[^"]+" class="[^"]*">.*?data-portal-app="directory"/)
+    expect(html).toMatch(/data-portal-app-group="ai"><h3[^>]*>AI を使う<\/h3><ul id="[^"]+" class="[^"]*">.*?data-portal-app="knowledge"/)
+    expect(html).toMatch(
+      /data-portal-app-group="manage"><h3[^>]*><button type="button" aria-expanded="false" aria-controls="([^"]+)"[^>]*>.*?つくる・管理する<span[^>]*>3<\/span><\/button><\/h3><ul id="\1" hidden=""/
+    )
+    const en = renderApps({ status: 'ready', home: mockHome() }, '', 'en')
+    for (const heading of ['>For everyday work</h3>', '>AI</h3>', 'Build and manage<span']) expect(en).toContain(heading)
+  })
+
+  test('a search opens build and manage without the toggle and filters across groups', () => {
+    const html = renderApps({ status: 'ready', home: mockHome() }, 'ます')
+    expect([...html.matchAll(/data-portal-app-group="(\w+)"/g)].map((match) => match[1])).toEqual(['everyday', 'ai', 'manage'])
+    expect(html).not.toContain('aria-expanded')
+    expect(html).not.toContain('hidden=""')
+    expect(html).toMatch(/data-portal-app-group="manage"><h3[^>]*>つくる・管理する<span[^>]*>3<\/span><\/h3><ul id="[^"]+" class="[^"]*">.*?data-portal-app="vision"/)
+    expect(html).not.toContain('data-portal-app="directory"')
+  })
+
+  test('when only one group has apps, its tiles show open and without a heading', () => {
+    const html = renderApps({ status: 'ready', home: mockHome() }, 'ビ')
+    expect(html).not.toContain('data-portal-app-group')
+    expect(html).not.toContain('hidden=""')
+    for (const id of ['builder-console', 'tool-builder', 'vision']) expect(html).toContain(`data-portal-app="${id}"`)
   })
 })
 

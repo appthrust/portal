@@ -158,13 +158,26 @@ Home, top to bottom:
 3. **お知らせ**: pinned and `important` first, each row with category, title,
    date and an unread mark; five rows, then "すべて見る". Posters see
    "お知らせを書く". Selecting a row opens the announcement and marks it read.
-4. **アプリ**: every installed app except Portal as a compact tile — icon,
-   localized title, localized tagline. Text comes from
-   `builtinApps[].locales[language]`; a field the catalog does not localize
-   falls back to `name`/`description`. No hostname. An app that is not
-   `Ready` keeps a status badge in the viewer's language. The read model's
-   phase set is open: `Pending` and any phase Portal does not know render as
-   準備中 and never fail the page.
+4. **アプリ**: every installed app except Portal as a launcher tile — a large
+   icon on a per-app colour, the localized title, and the localized tagline
+   clamped to one line (full text as the tile's tooltip). Tiles are grouped
+   by purpose, from the optional `builtinApps[].category` (the catalog's
+   category id, forwarded by `appserver-go`):
+
+   | Group, in order | Categories | Shown |
+   | --- | --- | --- |
+   | 仕事で使う / For everyday work | `collaborate` | open |
+   | AI を使う / AI | `assist` | open |
+   | つくる・管理する / Build and manage | `build`, `develop`, any other or none | collapsed behind a disclosure, with a count |
+
+   A group with no app is not rendered; when only one group has apps its
+   heading is omitted. Search opens every group and filters across all of
+   them. Text comes from `builtinApps[].locales[language]`; a field the
+   catalog does not localize falls back to `name`/`description`. No hostname.
+   An app that is not `Ready` keeps a status badge in the viewer's language.
+   The read model's phase set is open and never fails the page: `Pending`
+   renders as 準備中, `NeedsConfiguration` as 要確認, and `UpdateAvailable` or
+   any phase Portal does not know as a usable app without a badge.
 5. Provider sections (自分のアプリ / 部署のアプリ / 社内のアプリ), unchanged in
    behaviour.
 
