@@ -121,16 +121,26 @@ or unreachable database never stops the process: `/readyz` reports ready
 regardless, because the home does not need the database. Time is injected
 (`now func() time.Time`).
 
-## Catalog entry
+## Catalog entry and storage (open)
 
-`catalog/entry.yaml` gains a `postgresql` component (`provider: CNPG`,
-`storageSize: 1Gi`) and a `database` connection from `web`, as Memo and the
-tracker declare. Display stays `Home`/`home`: renaming the title or the
-hostname label would move existing installations' URL.
+The server reads its database from `PORTAL_DATABASE_URL`/`DATABASE_URL`, but no
+installation is given one today. `0.4.0` declared a `postgresql` component and
+`database` connection in `catalog/entry.yaml`; installed platforms reject any
+change to an existing definition's components or connections
+(`validateApplicationStackDefinitionRuntimeContractStable` in the operator's
+admission), and the rejection failed the whole catalog projection on Craftsman
+from 01:32Z to 02:02Z on 2026-11-10 until `0.4.1` restored the entry. The entry's
+runtime contract therefore stays as imported, and the announcement block shows
+that announcements are not available yet.
 
-An existing installation has no database until its stack is re-rendered by a
-version update. Until then the new image serves the home as before and the
-announcement block shows that announcements are not available yet.
+Candidate storage paths, undecided:
+
+1. A separate first-party app that owns announcements and its database, which
+   Portal reaches through a dependency link. Fits Portal's existing role as a
+   composer of provider-owned data; moves `internal/announcements` there.
+2. A new definition slug that declares the database from its first version;
+   existing installations uninstall Portal and install the new slug.
+3. A platform change that admits additive components on a definition update.
 
 ## UI
 
