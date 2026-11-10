@@ -57,11 +57,44 @@ describe('renderEntry', () => {
 
 test('catalog readback requires the exact slug, version and image digest', () => {
   const entry = renderEntry(template, '0.2.0', digest)
-  expect(catalogContainsRelease({ schemaVersion: 1, entries: [entry] }, '0.2.0', digest)).toBe(true)
-  expect(catalogContainsRelease({ schemaVersion: 1, entries: [entry] }, '0.2.0', nextDigest)).toBe(false)
-  expect(catalogContainsRelease({ schemaVersion: 1, entries: [entry] }, '0.2.1', digest)).toBe(false)
-  expect(catalogContainsRelease({ schemaVersion: 1, entries: [{ ...entry, slug: 'contacts' }] }, '0.2.0', digest)).toBe(false)
-  expect(catalogContainsRelease({ entries: [entry] }, '0.2.0', digest)).toBe(false)
+  expect(catalogContainsRelease({ schemaVersion: 1, entries: [entry] }, 'portal', '0.2.0', digest)).toBe(true)
+  expect(catalogContainsRelease({ schemaVersion: 1, entries: [entry] }, 'portal', '0.2.0', nextDigest)).toBe(false)
+  expect(catalogContainsRelease({ schemaVersion: 1, entries: [entry] }, 'portal', '0.2.1', digest)).toBe(false)
+  expect(catalogContainsRelease({ schemaVersion: 1, entries: [entry] }, 'intranet-portal', '0.2.0', digest)).toBe(false)
+  expect(catalogContainsRelease({ entries: [entry] }, 'portal', '0.2.0', digest)).toBe(false)
+})
+
+describe('intranet-portal entry', () => {
+  const intranet = Bun.file(new URL('../catalog/intranet-portal/entry.yaml', import.meta.url)).text()
+
+  test('has no floor: its first release is its only version and declares the announcements database', async () => {
+    const entry = renderEntry(await intranet, '0.5.0', digest)
+    expect(entry.slug).toBe('intranet-portal')
+    expect(entry.versions).toEqual([{ name: '0.5.0', images: { web: `ghcr.io/appthrust/portal@${digest}` }, stream: '0.5', default: true, served: true }])
+    const definition = YAML.parse(entry.definitionYAML) as { spec: { components: Array<{ id: string }>; connections: unknown; publish: { hostnameLabel: string } } }
+    expect(definition.spec.components.map(component => component.id)).toEqual(['web', 'database'])
+    expect(definition.spec.connections).toEqual([{ from: 'web', name: 'database', to: 'database' }])
+    expect(definition.spec.publish.hostnameLabel).toBe('portal')
+  })
+
+  test('is stored under its own slug and never merges the portal entry', async () => {
+    const urls: string[] = []
+    const fetcher = mock(async (url: string, init: RequestInit) => {
+      urls.push(`${init.method} ${url}`)
+      if (url.endsWith('/entries')) return Response.json({ data: [renderEntry(template, '0.2.0', digest)] })
+      if (url.endsWith('/entries/intranet-portal')) {
+        expect((JSON.parse(init.body as string) as { versions: unknown[] }).versions).toHaveLength(1)
+        return Response.json({})
+      }
+      return Response.json({ id: 'snapshot', state: 'snapshot' })
+    })
+    await submitEntry(await intranet, '0.5.0', nextDigest, 'https://catalog.example', 'admin-token', fetcher)
+    expect(urls).toEqual(['GET https://catalog.example/api/v1/catalog/entries', 'PUT https://catalog.example/api/v1/catalog/entries/intranet-portal', 'POST https://catalog.example/api/v1/catalog/publish'])
+  })
+
+  test('a template with another name is rejected', () => {
+    expect(() => renderEntry(template.replace('name: portal', 'name: contacts'), '0.2.0', digest)).toThrow('template must be an ApplicationStackDefinition named portal or intranet-portal')
+  })
 })
 
 describe('submitEntry', () => {

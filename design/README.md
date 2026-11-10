@@ -121,26 +121,41 @@ or unreachable database never stops the process: `/readyz` reports ready
 regardless, because the home does not need the database. Time is injected
 (`now func() time.Time`).
 
-## Catalog entry and storage (open)
+## Catalog entries and storage
 
-The server reads its database from `PORTAL_DATABASE_URL`/`DATABASE_URL`, but no
-installation is given one today. `0.4.0` declared a `postgresql` component and
-`database` connection in `catalog/entry.yaml`; installed platforms reject any
-change to an existing definition's components or connections
+The server reads its database from `PORTAL_DATABASE_URL`/`DATABASE_URL`.
+`0.4.0` declared a `postgresql` component and `database` connection in
+`catalog/entry.yaml`; installed platforms reject any change to an existing
+definition's components or connections
 (`validateApplicationStackDefinitionRuntimeContractStable` in the operator's
 admission), and the rejection failed the whole catalog projection on Craftsman
-from 01:32Z to 02:02Z on 2026-11-10 until `0.4.1` restored the entry. The entry's
-runtime contract therefore stays as imported, and the announcement block shows
-that announcements are not available yet.
+from 01:32Z to 02:02Z on 2026-11-10 until `0.4.1` restored the entry. The
+`portal` definition's runtime contract therefore stays as imported and its
+installations never have a database.
 
-Candidate storage paths, undecided:
+Decision (2026-11-10): a second definition, `intranet-portal`, declares the
+database from its first version (`0.5.0`): components `web` and `database`
+(`postgresql`, `CNPG`, `1Gi`), connection `database`, title "Portal", hostname
+label `portal` so it can be installed next to `portal` (`home`) while a
+Project moves over. Creating a definition passes admission (server dry-run on
+Craftsman). Both definitions are published from this repository by the same
+tag and run the same server. The platform derives every environment variable
+from `releaseIdentityEnvPrefix` (`PORTAL` for both), so the definition id is
+carried by the image: `PORTAL_DEFINITION_ID`, a build argument, read by the
+launcher catalog and the link resolver.
 
-1. A separate first-party app that owns announcements and its database, which
-   Portal reaches through a dependency link. Fits Portal's existing role as a
-   composer of provider-owned data; moves `internal/announcements` there.
-2. A new definition slug that declares the database from its first version;
-   existing installations uninstall Portal and install the new slug.
-3. A platform change that admits additive components on a definition update.
+Rejected:
+
+- A separate announcements app that Portal reaches through a capability link.
+  It keeps Portal a pure composer, but a new repository cannot publish without
+  the catalog token and the dispatch key being granted to it, and it adds a
+  provider contract and a second UI for one aggregate.
+- A platform change that admits additive components on a definition update.
+  It needs a platform release delivered to every estate before any app can
+  rely on it.
+
+Open: retiring the `portal` entry (which sets its versions `served: false` on
+every estate) once its installations have moved.
 
 ## UI
 

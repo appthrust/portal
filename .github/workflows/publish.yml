@@ -17,6 +17,17 @@ concurrency:
 jobs:
   publish:
     if: github.repository == 'appthrust/portal'
+    # One image and one catalog entry per definition; the images differ only
+    # in PORTAL_DEFINITION_ID. Entries are submitted one at a time.
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - slug: portal
+            tag_suffix: ''
+          - slug: intranet-portal
+            tag_suffix: '-intranet'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -50,10 +61,13 @@ jobs:
       - name: Build and push both architectures
         env:
           VERSION: ${{ steps.release.outputs.version }}
+          IMAGE_TAG: ${{ steps.release.outputs.version }}${{ matrix.tag_suffix }}
+          SLUG: ${{ matrix.slug }}
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           docker buildx build --platform linux/amd64,linux/arm64 --push \
-            --tag "ghcr.io/appthrust/portal:$VERSION" \
+            --tag "ghcr.io/appthrust/portal:$IMAGE_TAG" \
+            --build-arg "PORTAL_DEFINITION_ID=$SLUG" \
             --label "org.opencontainers.image.source=https://github.com/appthrust/portal" \
             --label "org.opencontainers.image.version=$VERSION" \
             --label "org.opencontainers.image.revision=$GITHUB_SHA" \
@@ -62,9 +76,9 @@ jobs:
       - name: Resolve and sign the image index
         id: image
         env:
-          VERSION: ${{ steps.release.outputs.version }}
+          IMAGE_TAG: ${{ steps.release.outputs.version }}${{ matrix.tag_suffix }}
         run: |
-          digest="$(oras resolve "ghcr.io/appthrust/portal:$VERSION")"
+          digest="$(oras resolve "ghcr.io/appthrust/portal:$IMAGE_TAG")"
           [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
           test "$digest" = "$(jq -r '."containerimage.digest"' "$RUNNER_TEMP/portal-image.json")"
           cosign sign --yes "ghcr.io/appthrust/portal@$digest"
@@ -74,9 +88,10 @@ jobs:
         env:
           VERSION: ${{ steps.release.outputs.version }}
           DIGEST: ${{ steps.image.outputs.digest }}
+          SLUG: ${{ matrix.slug }}
           CLOUD_API_URL: ${{ vars.CLOUD_API_URL || 'https://api.appthrust.com' }}
           CLOUD_CATALOG_ADMIN_TOKEN: ${{ secrets.CLOUD_CATALOG_ADMIN_TOKEN }}
-        run: bun hack/publish-entry.ts submit --version "$VERSION" --digest "$DIGEST"
+        run: bun hack/publish-entry.ts submit --slug "$SLUG" --version "$VERSION" --digest "$DIGEST"
       - name: Mint the Cloud workflow dispatch token
         if: steps.catalog.outputs.state == 'snapshot'
         id: cloud-token
@@ -97,4 +112,5 @@ jobs:
         env:
           VERSION: ${{ steps.release.outputs.version }}
           DIGEST: ${{ steps.image.outputs.digest }}
-        run: bun hack/publish-entry.ts await --version "$VERSION" --digest "$DIGEST"
+          SLUG: ${{ matrix.slug }}
+        run: bun hack/publish-entry.ts await --slug "$SLUG" --version "$VERSION" --digest "$DIGEST"

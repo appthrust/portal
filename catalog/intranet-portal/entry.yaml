@@ -1,0 +1,51 @@
+apiVersion: appthrust.io/v1alpha1
+kind: ApplicationStackDefinition
+metadata:
+  name: intranet-portal
+spec:
+  access:
+    audiences:
+    - appthrust-platform-api
+    scopes:
+    - openid
+    - profile
+    - email
+  components:
+  - defaultValues:
+      livenessProbePath: /healthz
+      minScale: 1
+      port: 8080
+      publicURLEnv: PORTAL_PUBLIC_URL
+      readinessProbePath: /readyz
+    definitionRef:
+      name: web-service
+      version: v1
+    id: web
+  - defaultValues:
+      provider: CNPG
+      storageSize: 1Gi
+    definitionRef:
+      name: postgresql
+      version: v1
+    id: database
+  connections:
+  - from: web
+    name: database
+    to: database
+  consumes:
+  - launcher.entries/v1
+  display:
+    category: collaborate
+    description: Your organisation's intranet home, with announcements and every app in the Project.
+    iconRef:
+      name: home
+    title: Portal
+  publish:
+    hostnameLabel: portal
+  releaseIdentityEnvPrefix: PORTAL
+  updatePolicy:
+    allowed:
+    - pinned
+    - follow
+    default: pinned
+  versions: []
