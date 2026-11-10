@@ -168,8 +168,10 @@ non-asset path with the SPA.
 Home, top to bottom:
 
 1. Header: portal name, Project name, app switcher, language.
-2. Greeting with the viewer's name (`GET /me`) and today's date, and the app
-   search box.
+2. Greeting for the time of day and today's date, and the app search box. The
+   greeting carries no name: the token's `name` is the identity provider's
+   (for example "reoring User"), not the Directory profile name people know,
+   and Portal does not depend on Directory.
 3. **お知らせ**: pinned and `important` first, each row with category, title,
    date and an unread mark; five rows, then "すべて見る". Posters see
    "お知らせを書く". Selecting a row opens the announcement and marks it read.
@@ -179,15 +181,15 @@ Home, top to bottom:
    by purpose, from the optional `builtinApps[].category` (the catalog's
    category id, forwarded by `appserver-go`):
 
-   | Group, in order | Categories | Shown |
-   | --- | --- | --- |
-   | 仕事で使う / For everyday work | `collaborate` | open |
-   | AI を使う / AI | `assist` | open |
-   | つくる・管理する / Build and manage | `build`, `develop`, any other or none | collapsed behind a disclosure, with a count |
+   | Group, in order | Categories |
+   | --- | --- |
+   | 仕事で使う / For everyday work | `collaborate` |
+   | AI を使う / AI | `assist` |
+   | つくる・管理する / Build and manage | `build`, `develop`, any other or none |
 
-   A group with no app is not rendered; when only one group has apps its
-   heading is omitted. Search opens every group and filters across all of
-   them. Text comes from `builtinApps[].locales[language]`; a field the
+   Every group is open under a plain heading. A group with no app is not
+   rendered; when only one group has apps its heading is omitted. Search
+   filters across all groups. Text comes from `builtinApps[].locales[language]`; a field the
    catalog does not localize falls back to `name`/`description`. No hostname.
    An app that is not `Ready` keeps a status badge in the viewer's language.
    The read model's phase set is open and never fails the page: `Pending`

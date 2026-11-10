@@ -25,12 +25,9 @@ export const portalMessages = defineDashboardMessages({
     translations: { ja: 'アドレスが間違っているか、ページが移動した可能性があります。' },
   },
 
-  'portal.greeting.morning': { defaultMessage: 'Good morning, {name}', translations: { ja: 'おはようございます、{name}さん' } },
-  'portal.greeting.day': { defaultMessage: 'Hello, {name}', translations: { ja: 'こんにちは、{name}さん' } },
-  'portal.greeting.evening': { defaultMessage: 'Good evening, {name}', translations: { ja: 'こんばんは、{name}さん' } },
-  'portal.greeting.morning.anonymous': { defaultMessage: 'Good morning', translations: { ja: 'おはようございます' } },
-  'portal.greeting.day.anonymous': { defaultMessage: 'Hello', translations: { ja: 'こんにちは' } },
-  'portal.greeting.evening.anonymous': { defaultMessage: 'Good evening', translations: { ja: 'こんばんは' } },
+  'portal.greeting.morning': { defaultMessage: 'Good morning', translations: { ja: 'おはようございます' } },
+  'portal.greeting.day': { defaultMessage: 'Hello', translations: { ja: 'こんにちは' } },
+  'portal.greeting.evening': { defaultMessage: 'Good evening', translations: { ja: 'こんばんは' } },
   'portal.search.label': { defaultMessage: 'Search apps', translations: { ja: 'アプリを検索' } },
   'portal.search.placeholder': { defaultMessage: 'Find an app', translations: { ja: 'アプリを探す' } },
 

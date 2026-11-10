@@ -1,15 +1,14 @@
 // The apps part of the home. **アプリ**: every installed app except Portal as a
 // launcher tile (large icon on a per-app colour, title, one-line tagline) in
 // the viewer's language (catalog `locales`, falling back to the served
-// name/description), grouped by purpose; the build-and-manage group starts
-// collapsed. Then the employee-portal sections: one quiet line per provider
+// name/description), grouped by purpose. Then the employee-portal sections: one quiet line per provider
 // that could not answer, then the sections exactly as the server ordered them
 // (owner → group → project). Providers decide what a viewer sees and how it
 // opens (employee-portal.md §3.5); this file only renders it.
 import { iconFor } from '@appthrust/app-launcher'
 import type { DashboardLanguage } from '@appthrust/platform-dashboard-i18n'
-import { ArrowUpRight, ChevronRight, CircleAlert, Lock } from 'lucide-react'
-import { useId, useState } from 'react'
+import { ArrowUpRight, CircleAlert, Lock } from 'lucide-react'
+import { useId } from 'react'
 import {
   groupInstalledApps,
   installedAppText,
@@ -17,7 +16,6 @@ import {
   matchesInstalledApp,
   tileApps,
   type AppEntry,
-  type AppGroup,
   type HomeResponse,
   type HomeSection,
   type HomeState,
@@ -97,58 +95,21 @@ function InstalledApps({ apps, search, t, language }: { apps: InstalledApp[]; se
   }
   const groups = groupInstalledApps(matching)
   if (groups.length === 1) return <TileGrid apps={groups[0].apps} t={t} language={language} />
-  const searching = search.trim() !== ''
   return (
     <div className="space-y-5">
       {groups.map((group) => (
-        <AppGroupBlock key={group.id} group={group} searching={searching} t={t} language={language} />
+        <div key={group.id} data-portal-app-group={group.id}>
+          <h3 className="mb-1.5 flex min-h-8 items-center text-sm font-medium text-stone-600">{t(`portal.apps.group.${group.id}`)}</h3>
+          <TileGrid apps={group.apps} t={t} language={language} />
+        </div>
       ))}
     </div>
   )
 }
 
-/**
- * One purpose group under its heading. A collapsed group is a disclosure (button in the
- * heading, with the app count) that starts closed; a search shows it open without the toggle.
- */
-function AppGroupBlock({ group, searching, t, language }: { group: AppGroup; searching: boolean; t: Translate; language: DashboardLanguage }) {
-  const listId = useId()
-  const [expanded, setExpanded] = useState(false)
-  const title = t(`portal.apps.group.${group.id}`)
-  const toggleable = group.collapsed && !searching
-  const count = group.collapsed ? (
-    <span className="rounded-full bg-stone-200/70 px-1.5 py-0.5 text-xs leading-4 font-medium text-stone-600 tabular-nums">{group.apps.length}</span>
-  ) : null
+function TileGrid({ apps, t, language }: { apps: InstalledApp[]; t: Translate; language: DashboardLanguage }) {
   return (
-    <div data-portal-app-group={group.id}>
-      <h3 className="mb-1.5 flex min-h-8 items-center gap-1.5 text-sm font-medium text-stone-600">
-        {toggleable ? (
-          <button
-            type="button"
-            aria-expanded={expanded}
-            aria-controls={listId}
-            onClick={() => setExpanded((open) => !open)}
-            className="-ml-2 inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 hover:bg-stone-100 hover:text-stone-900 md:min-h-8"
-          >
-            <ChevronRight aria-hidden className={`size-4 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />
-            {title}
-            {count}
-          </button>
-        ) : (
-          <>
-            {title}
-            {count}
-          </>
-        )}
-      </h3>
-      <TileGrid id={listId} hidden={toggleable && !expanded} apps={group.apps} t={t} language={language} />
-    </div>
-  )
-}
-
-function TileGrid({ id, hidden, apps, t, language }: { id?: string; hidden?: boolean; apps: InstalledApp[]; t: Translate; language: DashboardLanguage }) {
-  return (
-    <ul id={id} hidden={hidden} className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4">
+    <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4">
       {apps.map((app) => (
         <li key={app.definitionId} className="flex min-w-0">
           <AppTile app={app} t={t} language={language} />

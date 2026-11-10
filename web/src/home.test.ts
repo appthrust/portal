@@ -225,9 +225,9 @@ describe('app groups', () => {
     }
   })
 
-  const ids = (apps: InstalledApp[]) => groupInstalledApps(apps).map((group) => [group.id, group.collapsed, group.apps.map((app) => app.definitionId)])
+  const ids = (apps: InstalledApp[]) => groupInstalledApps(apps).map((group) => [group.id, group.apps.map((app) => app.definitionId)])
 
-  test('each category lands in its group; any other category or none is build and manage, collapsed', () => {
+  test('each category lands in its group; any other category or none is build and manage', () => {
     const cases: Array<[string | undefined, AppGroupId]> = [
       ['collaborate', 'everyday'],
       ['assist', 'ai'],
@@ -251,15 +251,15 @@ describe('app groups', () => {
       installed('llm', { category: 'assist' }),
     ]
     expect(ids(apps)).toEqual([
-      ['everyday', false, ['directory', 'memo']],
-      ['ai', false, ['llm']],
-      ['manage', true, ['tool-builder', 'vision']],
+      ['everyday', ['directory', 'memo']],
+      ['ai', ['llm']],
+      ['manage', ['tool-builder', 'vision']],
     ])
     expect(ids(apps.filter((app) => app.category !== 'assist')).map(([id]) => id)).toEqual(['everyday', 'manage'])
   })
 
   test('one group with apps is one group; no apps is no group', () => {
-    expect(ids([installed('llm', { category: 'assist' }), installed('knowledge', { category: 'assist' })])).toEqual([['ai', false, ['llm', 'knowledge']]])
+    expect(ids([installed('llm', { category: 'assist' }), installed('knowledge', { category: 'assist' })])).toEqual([['ai', ['llm', 'knowledge']]])
     expect(ids([])).toEqual([])
   })
 })
