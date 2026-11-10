@@ -21,6 +21,7 @@ import (
 	"github.com/appthrust/appserver-go/appserver/platformenv"
 	"github.com/appthrust/appserver-go/appserver/releaseidentity"
 	"github.com/appthrust/portal/cmd/server/internal/announcements"
+	"github.com/appthrust/portal/cmd/server/internal/directory"
 	"github.com/appthrust/portal/cmd/server/internal/home"
 )
 
@@ -56,13 +57,7 @@ func newHandler(staticDir, platformAPIURL, projectID string, authenticator *iden
 	if catalog == nil || composer == nil {
 		platform = platformclient.New(upstream.String(), projectID, platformclient.WithHTTPClient(authenticator.HTTPClient()))
 	}
-	// The launcher marks this installation as current and the link resolver
-	// reads this installation's links, so both need the definition the image
-	// was published as.
-	definition := os.Getenv("PORTAL_DEFINITION_ID")
-	if definition == "" {
-		definition = "portal"
-	}
+	definition := definitionID()
 	if catalog == nil {
 		catalog = launcher.NewCatalog(platform, definition)
 	}
@@ -121,6 +116,12 @@ func announcementsHandler(upstreamURL, projectID string, auth *identity.Authenti
 		return handler, func() {}
 	}
 	platform := platformclient.New(upstreamURL, projectID, platformclient.WithHTTPClient(auth.HTTPClient()))
+	// The intranet-portal definition depends on Directory; the platform injects
+	// its in-cluster URL. Without it names resolve to "" and nothing fails.
+	resolver := link.NewResolver(platform, definitionID(), os.LookupEnv, map[string]link.Required{
+		"directory": {URLEnv: "PORTAL_DIRECTORY_URL", PublicURLEnv: "PORTAL_DIRECTORY_PUBLIC_URL"},
+	})
+	names := directory.New(link.NewClient(resolver, nil), time.Now)
 	stop := pending.Connect("portal database", time.Second, func(ctx context.Context) (io.Closer, error) {
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
@@ -128,10 +129,20 @@ func announcementsHandler(upstreamURL, projectID string, auth *identity.Authenti
 		if err != nil {
 			return nil, err
 		}
-		handler.Swap(announcements.New(database, auth.Authenticate, platform, time.Now))
+		handler.Swap(announcements.New(database, auth.Authenticate, platform, names, time.Now))
 		return database, nil
 	})
 	return handler, stop
+}
+
+// definitionID is the catalog definition this image was published as. The
+// launcher marks that installation as current and the link resolver reads its
+// links.
+func definitionID() string {
+	if definition := os.Getenv("PORTAL_DEFINITION_ID"); definition != "" {
+		return definition
+	}
+	return "portal"
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

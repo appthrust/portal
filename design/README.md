@@ -100,9 +100,18 @@ Errors: `400 invalid`, `401 unauthenticated`, `403 forbidden`, `404 not_found`,
 `503 identity_unavailable`, `503 portal_store_unavailable`. JSON bodies are at
 most 64 KiB and must be `application/json`.
 
-The author is whoever created the announcement: the token's `name` claim,
-falling back to the subject, snapshotted at creation. An edit keeps the author
-and moves only `updatedAt`. Portal does not depend on Directory.
+Names come from Directory. `intranet-portal` declares `directory` as an
+automatically installed dependency (`PORTAL_DIRECTORY_URL`), and the server
+reads the caller's own profile (`GET /api/directory/v1/me`) with the caller's
+bearer, cached per bearer hash (5 minutes; 30 seconds when unknown) and
+bounded to 3 seconds. `GET /me` returns that display name, or `""` when
+Directory is not linked, has no profile, or does not answer; it never returns
+the token's `name`, which is the identity provider's (for example
+"reoring User") and not what colleagues know the person by.
+
+The author is whoever created the announcement, snapshotted at creation as
+the Directory name, falling back to the token's `name` claim and then the
+subject. An edit keeps the author and moves only `updatedAt`.
 
 ## Server layout
 
@@ -168,10 +177,8 @@ non-asset path with the SPA.
 Home, top to bottom:
 
 1. Header: portal name, Project name, app switcher, language.
-2. Greeting for the time of day and today's date, and the app search box. The
-   greeting carries no name: the token's `name` is the identity provider's
-   (for example "reoring User"), not the Directory profile name people know,
-   and Portal does not depend on Directory.
+2. Greeting for the time of day with the viewer's Directory name (`GET /me`;
+   no name when it is `""`), today's date, and the app search box.
 3. **お知らせ**: pinned and `important` first, each row with category, title,
    date and an unread mark; five rows, then "すべて見る". Posters see
    "お知らせを書く". Selecting a row opens the announcement and marks it read.

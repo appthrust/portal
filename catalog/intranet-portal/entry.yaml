@@ -34,6 +34,11 @@ spec:
     to: database
   consumes:
   - launcher.entries/v1
+  dependencies:
+  - definition: directory
+    installPolicy: Automatic
+    publicURLEnv: PORTAL_DIRECTORY_PUBLIC_URL
+    urlEnv: PORTAL_DIRECTORY_URL
   display:
     category: collaborate
     description: Your organisation's intranet home, with announcements and every app in the Project.
