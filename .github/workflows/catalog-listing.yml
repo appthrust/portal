@@ -10,6 +10,7 @@ on:
     paths:
       - catalog/listing.yaml
       - catalog/screenshots/**
+      - catalog/intranet-portal/listing.yaml
       - hack/catalog-listing.ts
       - .github/workflows/catalog-listing.yml
   workflow_dispatch:
@@ -25,6 +26,12 @@ concurrency:
 jobs:
   listing:
     if: github.repository == 'appthrust/portal'
+    # Both definitions share the screenshots; each has its own listing text.
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        slug: [portal, intranet-portal]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -35,13 +42,16 @@ jobs:
         with:
           bun-version: 1.4.1
       - name: Validate the listing
-        run: bun hack/publish-entry.ts validate-listing
+        env:
+          SLUG: ${{ matrix.slug }}
+        run: bun hack/publish-entry.ts validate-listing --slug "$SLUG"
       - name: Submit the listing
         id: catalog
         env:
+          SLUG: ${{ matrix.slug }}
           CLOUD_API_URL: ${{ vars.CLOUD_API_URL || 'https://api.appthrust.com' }}
           CLOUD_CATALOG_ADMIN_TOKEN: ${{ secrets.CLOUD_CATALOG_ADMIN_TOKEN }}
-        run: bun hack/publish-entry.ts listing
+        run: bun hack/publish-entry.ts listing --slug "$SLUG"
       - name: Mint the Cloud workflow dispatch token
         if: steps.catalog.outputs.state == 'snapshot'
         id: cloud-token
