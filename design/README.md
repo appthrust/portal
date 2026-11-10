@@ -57,6 +57,12 @@ No role is stored in Portal. The decision is a pure function
 (`announcements.CanPost(role string, member bool) bool`), table-tested.
 Access keys (`Principal.Kind == "key"`) are rejected, as on the home route.
 
+Both catalog entries request `access.tokenClaims: [groups]`. Portal asks the
+Platform API with the viewer's own token, and a Project role granted through a
+group is matched on the token's `groups` claim; without it a member who has
+access only through a group is refused `project.read` and sees no apps
+(observed on Craftsman, 2026-11-10).
+
 ## API (`/api/portal/v1`)
 
 `GET /home` is unchanged. New routes use the SDK `httpx` envelope. Times are
