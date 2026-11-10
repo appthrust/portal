@@ -56,11 +56,18 @@ func newHandler(staticDir, platformAPIURL, projectID string, authenticator *iden
 	if catalog == nil || composer == nil {
 		platform = platformclient.New(upstream.String(), projectID, platformclient.WithHTTPClient(authenticator.HTTPClient()))
 	}
+	// The launcher marks this installation as current and the link resolver
+	// reads this installation's links, so both need the definition the image
+	// was published as.
+	definition := os.Getenv("PORTAL_DEFINITION_ID")
+	if definition == "" {
+		definition = "portal"
+	}
 	if catalog == nil {
-		catalog = launcher.NewCatalog(platform, "portal")
+		catalog = launcher.NewCatalog(platform, definition)
 	}
 	if composer == nil {
-		resolver := link.NewResolver(platform, "portal", os.LookupEnv, nil)
+		resolver := link.NewResolver(platform, definition, os.LookupEnv, nil)
 		composer = home.New(catalog, resolver, link.NewClient(resolver, nil), nil)
 	}
 	if notices == nil {

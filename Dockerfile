@@ -21,6 +21,10 @@ RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/g
 
 # No JavaScript runtime is needed: the Go server serves the SPA and the API.
 FROM gcr.io/distroless/static:nonroot
+# The catalog definition this image is installed as. The platform gives both
+# definitions the same environment, so the image carries the identity.
+ARG PORTAL_DEFINITION_ID=portal
+ENV PORTAL_DEFINITION_ID=${PORTAL_DEFINITION_ID}
 COPY --from=server-builder /out/portal-server /portal-server
 COPY --from=spa-builder /workspace/web/dist /srv/portal
 USER 65532

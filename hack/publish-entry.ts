@@ -7,6 +7,24 @@ import { loadListing, type Listing, type MediaBlob, uploadMedia, validateListing
 
 const catalogRepository = 'ghcr.io/appthrust/catalog'
 const imageRepository = 'ghcr.io/appthrust/portal'
+
+/**
+ * The definitions this repository publishes. Both run the same server; each
+ * has its own image so the server knows which installation it is.
+ * `intranet-portal` declares the database announcements need, which the
+ * `portal` definition cannot gain (components are immutable once installed).
+ */
+export const slugs = ['portal', 'intranet-portal'] as const
+export type Slug = (typeof slugs)[number]
+
+function isSlug(value: unknown): value is Slug {
+  return (slugs as readonly unknown[]).includes(value)
+}
+
+function catalogDir(slug: Slug): URL {
+  return new URL(slug === 'portal' ? '../catalog/' : `../catalog/${slug}/`, import.meta.url)
+}
+
 const digestPattern = /^sha256:[a-f0-9]{64}$/
 const versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?$/
 const exec = promisify(execFile)
@@ -53,10 +71,11 @@ export function validateRelease(version: string, digest: string): void {
 export function renderEntry(template: string, version: string, digest: string, previous?: CatalogEntry, listing?: Listing): CatalogEntry {
   validateRelease(version, digest)
   const definition = YAML.parse(template) as Definition
-  if (definition.apiVersion !== 'appthrust.io/v1alpha1' || definition.kind !== 'ApplicationStackDefinition' || definition.metadata.name !== 'portal') {
-    throw new Error('template must be the portal ApplicationStackDefinition')
+  const slug = definition.metadata?.name
+  if (definition.apiVersion !== 'appthrust.io/v1alpha1' || definition.kind !== 'ApplicationStackDefinition' || !isSlug(slug)) {
+    throw new Error(`template must be an ApplicationStackDefinition named ${slugs.join(' or ')}`)
   }
-  if (previous && previous.slug !== 'portal') throw new Error('previous entry must have slug portal')
+  if (previous && previous.slug !== slug) throw new Error(`previous entry must have slug ${slug}`)
 
   // Every tag starts from the committed floor. Merge the store's history so the
   // second app release cannot silently remove the first one from the catalog.
@@ -86,7 +105,7 @@ export function renderEntry(template: string, version: string, digest: string, p
   if (listing) validateListing(listing)
   const carried = listing ?? previous?.listing
   return {
-    slug: 'portal',
+    slug,
     definitionYAML: YAML.stringify(definition),
     versions: definition.spec.versions,
     updatePolicy: definition.spec.updatePolicy,
@@ -103,15 +122,15 @@ export function renderEntry(template: string, version: string, digest: string, p
  * listing itself.
  */
 export function renderListingUpdate(current: CatalogEntry, listing: Listing): CatalogEntry {
-  if (current.slug !== 'portal') throw new Error('current entry must have slug portal')
+  if (!isSlug(current.slug)) throw new Error(`current entry must have slug ${slugs.join(' or ')}`)
   validateListing(listing)
   return { ...current, listing }
 }
 
-export function catalogContainsRelease(index: unknown, version: string, digest: string): boolean {
+export function catalogContainsRelease(index: unknown, slug: Slug, version: string, digest: string): boolean {
   if (!index || typeof index !== 'object' || !('schemaVersion' in index) || index.schemaVersion !== 1 ||
     !('entries' in index) || !Array.isArray(index.entries)) return false
-  return index.entries.some(entry => entry?.slug === 'portal' && Array.isArray(entry.versions) &&
+  return index.entries.some(entry => entry?.slug === slug && Array.isArray(entry.versions) &&
     entry.versions.some((candidate: CatalogVersion) => candidate?.name === version && candidate.images?.web === `${imageRepository}@${digest}`))
 }
 
@@ -122,7 +141,7 @@ async function command(args: string[], deadline: number): Promise<string> {
   return stdout
 }
 
-async function publishedRelease(version: string, digest: string, deadline: number): Promise<boolean> {
+async function publishedRelease(slug: Slug, version: string, digest: string, deadline: number): Promise<boolean> {
   const manifestDigest = (await command(['oras', 'resolve', `${catalogRepository}:latest`], deadline)).trim()
   if (!digestPattern.test(manifestDigest)) throw new Error('catalog manifest has an invalid digest')
   const reference = `${catalogRepository}@${manifestDigest}`
@@ -135,12 +154,12 @@ async function publishedRelease(version: string, digest: string, deadline: numbe
   if (`sha256:${createHash('sha256').update(bytes).digest('hex')}` !== layer.digest) {
     throw new Error('catalog index digest mismatch')
   }
-  if (!catalogContainsRelease(JSON.parse(bytes), version, digest)) return false
+  if (!catalogContainsRelease(JSON.parse(bytes), slug, version, digest)) return false
   // latest may move before signing completes. Only a matching, trusted artifact
   // is publication proof; never treat the dispatch response as success.
   await command(['cosign', 'verify', '--certificate-oidc-issuer', 'https://token.actions.githubusercontent.com',
     '--certificate-identity', 'https://github.com/appthrust/cloud/.github/workflows/catalog-publish.yml@refs/heads/main', reference], deadline)
-  console.log(`Published portal ${version} in signed catalog ${reference}`)
+  console.log(`Published ${slug} ${version} in signed catalog ${reference}`)
   return true
 }
 
@@ -156,6 +175,7 @@ export interface CatalogPublication {
  * immutable, so a second build with a different digest is rejected.
  */
 export async function recordedDigest(
+  slug: Slug,
   version: string,
   baseURL: string,
   token: string,
@@ -170,7 +190,7 @@ export async function recordedDigest(
   if (response.status !== 200) throw new Error(`GET /catalog/entries failed (${response.status})`)
   const current = await response.json() as { data: CatalogEntry[] }
   if (!Array.isArray(current.data)) throw new Error('catalog entries response must contain data[]')
-  const recorded = current.data.find(entry => entry.slug === 'portal')?.versions.find(entry => entry.name === version)
+  const recorded = current.data.find(entry => entry.slug === slug)?.versions.find(entry => entry.name === version)
   if (!recorded) return null
   const image = recorded.images.web
   if (typeof image !== 'string' || !image.startsWith(`${imageRepository}@`) || Object.keys(recorded.images).length !== 1) {
@@ -188,7 +208,7 @@ interface CatalogClient {
   publish(): Promise<CatalogPublication>
 }
 
-function catalogClient(baseURL: string, token: string, fetcher: (url: string, init: RequestInit) => Promise<Response>): CatalogClient {
+function catalogClient(baseURL: string, token: string, fetcher: (url: string, init: RequestInit) => Promise<Response>, slug: Slug): CatalogClient {
   async function request(path: string, method: string, body?: unknown): Promise<Response> {
     return fetcher(`${baseURL}/api/v1/catalog/${path}`, {
       method,
@@ -209,7 +229,7 @@ function catalogClient(baseURL: string, token: string, fetcher: (url: string, in
     async currentEntry() {
       const current = await entryRequest('entries', 'GET') as { data: CatalogEntry[] }
       if (!Array.isArray(current.data)) throw new Error('catalog entries response must contain data[]')
-      return current.data.find(entry => entry.slug === 'portal')
+      return current.data.find(entry => entry.slug === slug)
     },
     async publish() {
       const response = await request('publish', 'POST')
@@ -234,63 +254,68 @@ export async function submitEntry(
   listing?: { listing: Listing; media: MediaBlob[] },
 ): Promise<CatalogPublication> {
   validateRelease(version, digest)
-  const client = catalogClient(baseURL, token, fetcher)
+  const slug = (YAML.parse(template) as Definition).metadata?.name
+  if (!isSlug(slug)) throw new Error(`template must be an ApplicationStackDefinition named ${slugs.join(' or ')}`)
+  const client = catalogClient(baseURL, token, fetcher, slug)
   const previous = await client.currentEntry()
   if (listing) await uploadMedia(listing.media, baseURL, token, fetcher)
   const entry = renderEntry(template, version, digest, previous, listing?.listing)
-  await client.entryRequest('entries/portal', 'PUT', entry)
+  await client.entryRequest(`entries/${slug}`, 'PUT', entry)
   return client.publish()
 }
 
 /** Uploads screenshots, replaces the stored entry's listing, and requests a publication. */
 export async function submitListing(
+  slug: Slug,
   source: { listing: Listing; media: MediaBlob[] },
   baseURL: string,
   token: string,
   fetcher: (url: string, init: RequestInit) => Promise<Response> = fetch,
 ): Promise<CatalogPublication> {
-  const client = catalogClient(baseURL, token, fetcher)
+  const client = catalogClient(baseURL, token, fetcher, slug)
   const current = await client.currentEntry()
-  if (!current) throw new Error('catalog has no portal entry yet; publish a release tag first')
+  if (!current) throw new Error(`catalog has no ${slug} entry yet; publish a release tag first`)
   await uploadMedia(source.media, baseURL, token, fetcher)
-  await client.entryRequest('entries/portal', 'PUT', renderListingUpdate(current, source.listing))
+  await client.entryRequest(`entries/${slug}`, 'PUT', renderListingUpdate(current, source.listing))
   return client.publish()
 }
 
-async function optionalListing(): Promise<{ listing: Listing; media: MediaBlob[] } | undefined> {
-  const catalogDir = new URL('../catalog/', import.meta.url)
-  if (!(await Bun.file(new URL('listing.yaml', catalogDir)).exists())) return undefined
-  return loadListing(catalogDir)
+async function optionalListing(slug: Slug): Promise<{ listing: Listing; media: MediaBlob[] } | undefined> {
+  const dir = catalogDir(slug)
+  if (!(await Bun.file(new URL('listing.yaml', dir)).exists())) return undefined
+  return loadListing(dir)
 }
 
 async function main(): Promise<void> {
   const [subcommand, ...args] = Bun.argv.slice(2)
-  const { values } = parseArgs({ args, options: { version: { type: 'string' }, digest: { type: 'string' } }, strict: true })
+  const { values } = parseArgs({ args, options: { slug: { type: 'string' }, version: { type: 'string' }, digest: { type: 'string' } }, strict: true })
+  const slug = values.slug ?? 'portal'
+  if (!isSlug(slug)) throw new Error(`--slug must be ${slugs.join(' or ')}`)
   if (subcommand === 'recorded') {
-    if (!values.version || values.digest) throw new Error('usage: bun hack/publish-entry.ts recorded --version <semver>')
+    if (!values.version || values.digest) throw new Error('usage: bun hack/publish-entry.ts recorded [--slug <slug>] --version <semver>')
     validateRelease(values.version, `sha256:${'1'.repeat(64)}`)
     const token = process.env.CLOUD_CATALOG_ADMIN_TOKEN
     if (!token) throw new Error('CLOUD_CATALOG_ADMIN_TOKEN is required')
     const baseURL = (process.env.CLOUD_API_URL ?? 'https://api.appthrust.com').replace(/\/$/, '')
-    const digest = await recordedDigest(values.version, baseURL, token)
+    const digest = await recordedDigest(slug, values.version, baseURL, token)
     if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `digest=${digest ?? ''}\n`)
     console.log(digest ? `Catalog already records ${values.version} as ${digest}` : `Catalog has no image for ${values.version}`)
     return
   }
   if (subcommand === 'validate-listing') {
-    const source = await optionalListing()
-    if (!source) throw new Error('catalog/listing.yaml not found')
+    const source = await optionalListing(slug)
+    if (!source) throw new Error(`${slug}: listing.yaml not found`)
     console.log(`Listing valid: ${Object.keys(source.listing.locales).join(',')} locales, ${source.listing.highlights?.length ?? 0} highlights, ${source.media.length} screenshots (${source.media.reduce((sum, media) => sum + media.size, 0)} bytes)`)
     return
   }
   if (subcommand === 'listing') {
-    if (values.version || values.digest) throw new Error('usage: bun hack/publish-entry.ts listing')
+    if (values.version || values.digest) throw new Error('usage: bun hack/publish-entry.ts listing [--slug <slug>]')
     const token = process.env.CLOUD_CATALOG_ADMIN_TOKEN
     if (!token) throw new Error('CLOUD_CATALOG_ADMIN_TOKEN is required')
     const baseURL = (process.env.CLOUD_API_URL ?? 'https://api.appthrust.com').replace(/\/$/, '')
-    const source = await optionalListing()
-    if (!source) throw new Error('catalog/listing.yaml not found')
-    const publication = await submitListing(source, baseURL, token)
+    const source = await optionalListing(slug)
+    if (!source) throw new Error(`${slug}: listing.yaml not found`)
+    const publication = await submitListing(slug, source, baseURL, token)
     if (process.env.GITHUB_OUTPUT) {
       await appendFile(process.env.GITHUB_OUTPUT, `snapshot_id=${publication.id}\nstate=${publication.state}\n`)
     }
@@ -305,8 +330,8 @@ async function main(): Promise<void> {
     const token = process.env.CLOUD_CATALOG_ADMIN_TOKEN
     if (!token) throw new Error('CLOUD_CATALOG_ADMIN_TOKEN is required')
     const baseURL = (process.env.CLOUD_API_URL ?? 'https://api.appthrust.com').replace(/\/$/, '')
-    const template = await Bun.file(new URL('../catalog/entry.yaml', import.meta.url)).text()
-    const publication = await submitEntry(template, values.version, values.digest, baseURL, token, fetch, await optionalListing())
+    const template = await Bun.file(new URL('entry.yaml', catalogDir(slug))).text()
+    const publication = await submitEntry(template, values.version, values.digest, baseURL, token, fetch, await optionalListing(slug))
     if (process.env.GITHUB_OUTPUT) {
       await appendFile(process.env.GITHUB_OUTPUT, `snapshot_id=${publication.id}\nstate=${publication.state}\n`)
     }
@@ -316,14 +341,14 @@ async function main(): Promise<void> {
   const deadline = Date.now() + 10 * 60_000
   while (Date.now() < deadline) {
     try {
-      if (await publishedRelease(values.version, values.digest, deadline)) return
+      if (await publishedRelease(slug, values.version, values.digest, deadline)) return
       console.log('Catalog does not yet contain the released version and image digest')
     } catch (error) {
       console.error(`Catalog not yet verified: ${error instanceof Error ? error.message : String(error)}`)
     }
     await Bun.sleep(Math.min(15_000, Math.max(0, deadline - Date.now())))
   }
-  throw new Error(`catalog did not publish the signed portal ${values.version} image within 10 minutes`)
+  throw new Error(`catalog did not publish the signed ${slug} ${values.version} image within 10 minutes`)
 }
 
 if (import.meta.main) {

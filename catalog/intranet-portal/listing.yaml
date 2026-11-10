@@ -1,0 +1,90 @@
+locales:
+  en:
+    title: Portal
+    tagline: Your organisation's intranet home, with announcements and every app in your Project on one page.
+    overview: |
+      Portal is the page everyone in a Project opens first. At the top are announcements written by your own organisation: holiday closures, maintenance notices, events. Below them is every app installed in the Project, so people find both the news and the tools without bookmarks.
+
+      Project administrators and editors write announcements in Markdown, choose a category (general, important or event), pin the ones that must stay on top, and can schedule a publish time and an end date. Everyone else reads them. Each person sees which announcements they have not opened yet, on any device, and can mark all as read.
+
+      Apps appear as compact tiles with a name and a one-line description in the reader's language, and a badge when an app needs attention. The search box narrows them as you type. Apps that provide their own launch entries, such as apps built and shared through Builder Console, follow in sections for the viewer's own apps, their department's apps and company-wide apps.
+
+      Portal keeps announcements and read marks in its own database inside the Project. People sign in with their organisation account, the page works at phone width, and the display language switches between Japanese and English.
+  ja:
+    title: ポータル
+    tagline: 社内のお知らせとプロジェクトのアプリを 1 つのページにまとめた、社内ポータルです。
+    overview: |
+      ポータルは、プロジェクトで働く人が最初に開くページです。いちばん上に、休業日やメンテナンス、イベントなど、自社で書いたお知らせが並びます。その下にプロジェクトのアプリがすべて並ぶので、ブックマークを作らなくても、知らせと道具の両方にたどり着けます。
+
+      お知らせを書けるのは、プロジェクトの管理者と編集者です。Markdown で本文を書き、種類（一般・重要・イベント）を選び、大事なものは先頭に固定できます。公開する日時と掲載を終える日時も指定できます。ほかの人は読むだけです。まだ開いていないお知らせには印が付き、どの端末から見ても同じ状態です。まとめて既読にすることもできます。
+
+      アプリは、名前と 1 行の説明を載せた小さなタイルで表示します。説明は表示言語に合わせて切り替わり、注意が必要なアプリには印が付きます。検索欄に入力すると、入力中から絞り込まれます。Builder Console で作って共有したアプリのように、起動先を提供するアプリがあれば、「自分のアプリ」「部署のアプリ」「社内のアプリ」に分けてその下に表示します。
+
+      お知らせと既読の記録は、プロジェクト内のポータル専用データベースに保存します。サインインには組織のアカウントを使います。スマートフォンの幅でも使え、表示言語は日本語と英語を切り替えられます。
+highlights:
+  - screenshot: home
+    locales:
+      en:
+        title: Announcements and apps on one page
+        body: The home opens with a greeting, the latest announcements with an unread count, and every app in the Project as a tile with a one-line description.
+      ja:
+        title: お知らせとアプリを 1 ページに
+        body: ホームを開くと、あいさつ、未読件数つきの新しいお知らせ、プロジェクトのアプリが 1 行の説明つきのタイルで並びます。
+  - screenshot: announcement
+    locales:
+      en:
+        title: Write announcements in Markdown
+        body: Administrators and editors publish announcements with headings, lists and links, mark them important, pin them, or schedule them for later.
+      ja:
+        title: Markdown でお知らせを書く
+        body: 管理者と編集者は、見出しや箇条書き、リンクを使ってお知らせを書けます。重要の印、先頭への固定、日時を決めた予約公開もできます。
+  - screenshot: announcements
+    locales:
+      en:
+        title: Know what you have not read
+        body: Unread announcements carry a mark that follows each person across devices. Writers also see scheduled and ended announcements in the full list.
+      ja:
+        title: 未読がひと目で分かる
+        body: まだ開いていないお知らせには印が付き、どの端末でも同じ状態です。書く人は、一覧で予約中や掲載が終わったお知らせも確認できます。
+  - screenshot: mobile
+    locales:
+      en:
+        title: Works on a phone
+        body: At phone width the announcements and app tiles stack in one column, with search and the write button within reach.
+      ja:
+        title: スマートフォンでも使える
+        body: スマートフォンの幅では、お知らせとアプリのタイルが 1 列に並びます。検索欄や「お知らせを書く」もそのまま使えます。
+  - screenshot: english
+    locales:
+      en:
+        title: Japanese or English
+        body: One button in the header switches the page, including app names and descriptions, between Japanese and English. The choice is remembered in the browser.
+      ja:
+        title: 日本語と英語を切り替え
+        body: ヘッダーのボタン 1 つで、アプリの名前や説明も含めてページ全体を日本語と英語で切り替えられます。選んだ言語はブラウザに保存されます。
+screenshots:
+  - name: home
+    file: home.webp
+    alt:
+      en: "Home in Japanese: a morning greeting with the date, an announcements list with four unread items including a pinned holiday notice and an important network maintenance notice, and app tiles below."
+      ja: "日本語表示のホーム。日付とあいさつの下に、固定された年末年始休業や重要のネットワーク機器入れ替えなど未読 4 件のお知らせが並び、その下にアプリのタイルがあります。"
+  - name: announcement
+    file: announcement.webp
+    alt:
+      en: "An important announcement about replacing network equipment on 15 November, with headings for the work time and the impact, the author and publish time, and Edit and Delete buttons."
+      ja: "11月15日のネットワーク機器入れ替えを伝える重要のお知らせ。作業日時と影響の見出し、投稿者と公開日時、編集と削除のボタンがあります。"
+  - name: announcements
+    file: announcements.webp
+    alt:
+      en: "The full announcements list as seen by a writer, with three unread, each item labelled as published or scheduled, with category, excerpt, author and date."
+      ja: "書く人から見たお知らせ一覧。未読は 3 件で、それぞれに公開中や予約の印、種類、本文の冒頭、投稿者、日付が表示されています。"
+  - name: mobile
+    file: mobile.webp
+    alt:
+      en: "Home at phone width in Japanese: greeting, search box, the announcements list with the write button, then app tiles stacked in one column."
+      ja: "スマートフォン幅で表示した日本語のホーム。あいさつ、検索欄、「お知らせを書く」のあるお知らせ一覧、1 列に並んだアプリのタイルが続きます。"
+  - name: english
+    file: english.webp
+    alt:
+      en: "The same Home page in English: Good morning greeting, Announcements with 4 unread and a Write an announcement button, and Apps tiles with English descriptions."
+      ja: "英語表示に切り替えたホーム。Good morning のあいさつ、未読 4 件の Announcements と Write an announcement のボタン、英語の説明が付いたアプリのタイルが並んでいます。"

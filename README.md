@@ -98,11 +98,20 @@ new-version image is committed.
 an existing definition (`ApplicationStackDefinition "portal" components are
 immutable`), and that rejection fails the whole catalog projection for every app,
 not only Portal. `0.4.0` added a `postgresql` component and stopped catalog sync
-until `0.4.1` restored the entry. Consequently no installation has a database
-yet: the image serves the home and reports announcements as unavailable. The
-storage path is an open decision in [`design/README.md`](design/README.md).
+until `0.4.1` restored the entry. Consequently a `portal` installation never has a
+database: it serves the home and reports announcements as unavailable.
 
-To release, push a SemVer tag such as `v0.4.2`.
+Announcements need the second definition this repository publishes,
+**`intranet-portal`** (`catalog/intranet-portal/`, title "Portal", hostname label
+`portal`), which declares the `postgresql` component and `database` connection
+from its first version, `0.5.0`. It is a separate app in the Marketplace; a
+Project that wants announcements installs it and may then uninstall `portal`.
+Both definitions run the same server. Because the platform gives both the same
+environment, each gets its own image (`ghcr.io/appthrust/portal:<version>` and
+`:<version>-intranet`) that differs only in `PORTAL_DEFINITION_ID`, which the
+server uses to find its own installation.
+
+To release, push a SemVer tag such as `v0.5.0`; it publishes both definitions.
 The tag workflow:
 
 1. Performs one multi-platform build on `ubuntu-24.04` for Linux amd64 and arm64,
