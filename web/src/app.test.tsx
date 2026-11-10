@@ -102,13 +102,18 @@ describe('home layout', () => {
     expect(html).toMatch(/<div role="search"[^>]*>.*<label for="([^"]+)"[^>]*>アプリを検索<\/label>.*<input id="\1" type="search"[^>]*maxLength="128"/)
   })
 
-  test('the greeting carries no name and shows today in the viewer language', () => {
+  test('the greeting names the viewer by the Directory name from /me and shows today in the viewer language', () => {
     const ja = render(ready())
-    expect(ja).toMatch(/data-portal-greeting=""[^>]*>(おはようございます|こんにちは|こんばんは)<\/h1>/)
+    expect(ja).toMatch(/data-portal-greeting=""[^>]*>(おはようございます|こんにちは|こんばんは)、山田 太郎さん<\/h1>/)
     expect(ja).toContain(new Intl.DateTimeFormat('ja-JP', { dateStyle: 'full' }).format(new Date()))
     const en = render(ready(), <PortalPage config={config} route={HOME} />, 'en')
-    expect(en).toMatch(/data-portal-greeting=""[^>]*>(Good morning|Hello|Good evening)<\/h1>/)
+    expect(en).toMatch(/data-portal-greeting=""[^>]*>(Good morning|Hello|Good evening), 山田 太郎<\/h1>/)
     expect(en).toContain(new Intl.DateTimeFormat('en-US', { dateStyle: 'full' }).format(new Date()))
+  })
+
+  test('without a Directory name the greeting has no name', () => {
+    const html = render([seedHome(), seedMe({ ...mockMember, name: '' }), seedNews(page([]))])
+    expect(html).toMatch(/data-portal-greeting=""[^>]*>(おはようございます|こんにちは|こんばんは)<\/h1>/)
   })
 
   test('the header names the Project by its display name, with the id only in title', () => {

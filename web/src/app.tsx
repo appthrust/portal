@@ -79,12 +79,12 @@ function Shell({ project, children }: { project?: LauncherProject; children: Rea
   )
 }
 
-function Greeting({ now, search, onSearch }: { now: Date; search: string; onSearch: (value: string) => void }) {
+function Greeting({ name, now, search, onSearch }: { name: string | undefined; now: Date; search: string; onSearch: (value: string) => void }) {
   const { t, language } = useText()
   const searchId = useId()
   const part = dayPart(now)
-  // No name: the token's name is the identity provider's, not the Directory profile people know.
-  const greeting = t(`portal.greeting.${part}`)
+  // `/me` names the viewer by their Directory profile, or not at all.
+  const greeting = name?.trim() ? t(`portal.greeting.${part}`, { name: name.trim() }) : t(`portal.greeting.${part}.anonymous`)
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
@@ -117,7 +117,7 @@ function Greeting({ now, search, onSearch }: { now: Date; search: string; onSear
   )
 }
 
-function HomePage({ config, canPost, now }: { config: PortalConfig; canPost: boolean; now: Date }) {
+function HomePage({ config, name, canPost, now }: { config: PortalConfig; name: string | undefined; canPost: boolean; now: Date }) {
   const { t } = useText()
   useDocumentTitle(t('portal.title'))
   const [search, setSearch] = useState('')
@@ -126,7 +126,7 @@ function HomePage({ config, canPost, now }: { config: PortalConfig; canPost: boo
   const home = useHome(q)
   return (
     <>
-      <Greeting now={now} search={search} onSearch={setSearch} />
+      <Greeting name={name} now={now} search={search} onSearch={setSearch} />
       <AnnouncementsBlock canPost={canPost} now={now} />
       <HomeApps state={home.state} stale={home.stale} search={search} q={q} dashboardUrl={config.dashboardUrl} onRetry={home.refetch} />
     </>
@@ -156,7 +156,7 @@ export function PortalPage({ config, route }: { config: PortalConfig; route: Rou
   const now = new Date()
   return (
     <Shell project={project}>
-      {route.name === 'home' ? <HomePage config={config} canPost={canPost === true} now={now} /> : null}
+      {route.name === 'home' ? <HomePage config={config} name={me.data?.name} canPost={canPost === true} now={now} /> : null}
       {route.name === 'announcements' ? <AnnouncementsPage canPost={canPost} now={now} /> : null}
       {route.name === 'announcement' ? <AnnouncementDetail id={route.id} canPost={canPost === true} /> : null}
       {route.name === 'newAnnouncement' ? <AnnouncementEditor canPost={canPost} storeUnavailable={storeUnavailable} /> : null}

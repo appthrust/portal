@@ -159,6 +159,16 @@ func (f *fakeStore) MarkAllRead(ctx context.Context, subject string, now time.Ti
 	return nil
 }
 
+type fakeNames struct {
+	name   string
+	bearer string
+}
+
+func (f *fakeNames) DisplayName(_ context.Context, bearer string) string {
+	f.bearer = bearer
+	return f.name
+}
+
 type fakeAccess struct {
 	access  platformclient.ProjectAccess
 	err     error
@@ -176,6 +186,7 @@ func (f *fakeAccess) Access(_ context.Context, subject, bearer string) (platform
 type fixture struct {
 	store   *fakeStore
 	access  *fakeAccess
+	names   *fakeNames
 	claims  identity.Identity
 	authErr error
 	now     time.Time
@@ -184,12 +195,12 @@ type fixture struct {
 
 func newFixture() *fixture {
 	f := &fixture{
-		store: newFakeStore(), access: &fakeAccess{access: platformclient.ProjectAccess{Role: "Admin"}},
+		store: newFakeStore(), access: &fakeAccess{access: platformclient.ProjectAccess{Role: "Admin"}}, names: &fakeNames{},
 		claims: identity.Identity{Principal: accesskey.Principal{Subject: "author", Kind: "user"}, Name: "投稿者"}, now: testNow,
 	}
 	f.handler = New(f.store, func(_ context.Context, _ string) (identity.Identity, string, error) {
 		return f.claims, "Bearer verified", f.authErr
-	}, f.access, func() time.Time { return f.now })
+	}, f.access, f.names, func() time.Time { return f.now })
 	return f
 }
 
@@ -226,7 +237,7 @@ func (f *fixture) create(t *testing.T, body string) Detail {
 func TestMeAndAuthorSnapshot(t *testing.T) {
 	f := newFixture()
 	w := f.request("GET", "/me", "")
-	require.JSONEq(t, `{"subject":"author","name":"投稿者","canPost":true}`, w.Body.String())
+	require.JSONEq(t, `{"subject":"author","name":"","canPost":true}`, w.Body.String())
 	require.Equal(t, "author", f.access.subject)
 	require.Equal(t, "Bearer verified", f.access.bearer)
 	item := f.create(t, `{"title":" お知らせ　","body":"**本文**"}`)
@@ -250,10 +261,18 @@ func TestMeAndAuthorSnapshot(t *testing.T) {
 	f.claims.Name = ""
 	f.access.access = platformclient.ProjectAccess{Role: "Editor", NotMember: true}
 	w = f.request("GET", "/me", "")
-	require.JSONEq(t, `{"subject":"editor","name":"editor","canPost":false}`, w.Body.String())
+	require.JSONEq(t, `{"subject":"editor","name":"","canPost":false}`, w.Body.String())
 	f.access.access.NotMember = false
 	fallback := f.create(t, `{"title":"Fallback","body":""}`)
 	require.Equal(t, "editor", fallback.Author.Name)
+}
+
+func TestDirectoryNameIsTheGreetingAndTheAuthor(t *testing.T) {
+	f := newFixture()
+	f.names.name = "山田 太郎"
+	require.JSONEq(t, `{"subject":"author","name":"山田 太郎","canPost":true}`, f.request("GET", "/me", "").Body.String())
+	require.Equal(t, "Bearer verified", f.names.bearer)
+	require.Equal(t, Author{Subject: "author", Name: "山田 太郎"}, f.create(t, `{"title":"お知らせ","body":""}`).Author)
 }
 
 func TestAuthorization(t *testing.T) {

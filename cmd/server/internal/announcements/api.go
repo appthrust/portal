@@ -33,10 +33,18 @@ type AccessClient interface {
 	Access(context.Context, string, string) (platformclient.ProjectAccess, error)
 }
 
+// Names resolves the caller's Directory profile name from their bearer. It
+// returns "" when Directory is not installed, has no profile for the caller,
+// or does not answer; a name is never a reason to fail a request.
+type Names interface {
+	DisplayName(ctx context.Context, bearer string) string
+}
+
 type api struct {
 	store        Repository
 	authenticate launcher.AuthenticateFunc
 	platform     AccessClient
+	names        Names
 	now          func() time.Time
 	mux          *http.ServeMux
 }
@@ -44,6 +52,7 @@ type api struct {
 type request struct {
 	w       http.ResponseWriter
 	r       *http.Request
+	bearer  string
 	author  Author
 	canPost bool
 	now     time.Time
@@ -51,11 +60,11 @@ type request struct {
 
 type endpoint func(*request) (any, int, error)
 
-func New(database Repository, authenticate launcher.AuthenticateFunc, platform AccessClient, now func() time.Time) http.Handler {
+func New(database Repository, authenticate launcher.AuthenticateFunc, platform AccessClient, names Names, now func() time.Time) http.Handler {
 	if now == nil {
 		now = time.Now
 	}
-	a := &api{store: database, authenticate: authenticate, platform: platform, now: now, mux: http.NewServeMux()}
+	a := &api{store: database, authenticate: authenticate, platform: platform, names: names, now: now, mux: http.NewServeMux()}
 	a.route("GET /api/portal/v1/me", false, a.me)
 	a.route("GET /api/portal/v1/announcements", false, a.list)
 	a.route("GET /api/portal/v1/announcements/{id}", false, a.get)
@@ -67,7 +76,15 @@ func New(database Repository, authenticate launcher.AuthenticateFunc, platform A
 	return a
 }
 
-func Unavailable() http.Handler { return New(nil, nil, nil, nil) }
+func Unavailable() http.Handler { return New(nil, nil, nil, nil, nil) }
+
+// displayName is the caller's Directory profile name, or "".
+func (a *api) displayName(s *request) string {
+	if a.names == nil {
+		return ""
+	}
+	return a.names.DisplayName(s.r.Context(), s.bearer)
+}
 
 func (a *api) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -118,7 +135,7 @@ func (a *api) route(pattern string, poster bool, fn endpoint) {
 			httpx.WriteError(w, httpx.Fail(503, "identity_unavailable", "The platform role is temporarily unavailable"), "portal")
 			return
 		}
-		s := &request{w: w, r: r, author: Author{Subject: claims.Principal.Subject, Name: claims.Name},
+		s := &request{w: w, r: r, bearer: bearer, author: Author{Subject: claims.Principal.Subject, Name: claims.Name},
 			canPost: CanPost(access.Role, !access.NotMember), now: a.now().UTC()}
 		if s.author.Name == "" {
 			s.author.Name = s.author.Subject
@@ -165,6 +182,8 @@ func decode(s *request) (Changes, error) {
 	return changes, nil
 }
 
+// me names the caller by their Directory profile only: the token's name is
+// the identity provider's and is not what colleagues know them by.
 func (a *api) me(s *request) (any, int, error) {
 	if err := a.store.Check(s.r.Context()); err != nil {
 		return nil, 0, err
@@ -173,7 +192,7 @@ func (a *api) me(s *request) (any, int, error) {
 		Subject string `json:"subject"`
 		Name    string `json:"name"`
 		CanPost bool   `json:"canPost"`
-	}{s.author.Subject, s.author.Name, s.canPost}, http.StatusOK, nil
+	}{s.author.Subject, a.displayName(s), s.canPost}, http.StatusOK, nil
 }
 
 func (a *api) list(s *request) (any, int, error) {
@@ -215,7 +234,12 @@ func (a *api) create(s *request) (any, int, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	item, err := a.store.Create(s.r.Context(), changes, s.author, s.now)
+	// The author snapshot prefers the Directory name and falls back to the token's.
+	author := s.author
+	if name := a.displayName(s); name != "" {
+		author.Name = name
+	}
+	item, err := a.store.Create(s.r.Context(), changes, author, s.now)
 	if err != nil {
 		return nil, 0, err
 	}
