@@ -1,11 +1,12 @@
-// `GET /api/portal/v1/home?q=` from cmd/portal-server: the Project, its
-// installed apps (the `/launcher` entries; the wire key is
-// portal-server's `builtinApps`) and the Launch Entries every
+// `GET /api/portal/v1/home?q=` from cmd/server: the Project, its installed
+// apps (the `/launcher` entries plus the catalog's per-language display text;
+// the wire key is `builtinApps`) and the Launch Entries every
 // `launcher.entries/v1` provider made for this viewer, grouped into sections
 // (owner → group → project), plus one state per provider. The edge holds the
 // session cookie; the SPA never handles a token. Like `/launcher`, freshness is
 // bounded by the server-side cache only, so the client keeps nothing stale.
-import { Entry as InstalledAppEntry, LauncherProject } from '@appthrust/app-launcher'
+import { LauncherProject } from '@appthrust/app-launcher'
+import type { DashboardLanguage } from '@appthrust/platform-dashboard-i18n'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
@@ -30,9 +31,30 @@ export type AppEntry = {
 
 export type HomeSection = { relation: Relation; group: GroupRef | null; entries: AppEntry[] }
 export type SourceState = { definitionId: string; state: 'ready' | 'absent' | 'unavailable' }
-export type HomeResponse = { project: LauncherProject; installedApps: InstalledAppEntry[]; sections: HomeSection[]; sources: SourceState[] }
-/** The body portal-server sends; it still names the installed apps `builtinApps`. */
-export type HomeWireBody = Omit<HomeResponse, 'installedApps'> & { builtinApps: InstalledAppEntry[] }
+
+/** Catalog display text for one language; a field the catalog does not localize is absent. */
+export type AppLocale = { title?: string; tagline?: string }
+/**
+ * An installed app's phase from the Platform read model. `Pending` is reported before installation
+ * starts; the read model may add phases later, and any phase Portal does not know reads as `Pending`.
+ */
+export type InstalledPhase = 'Pending' | 'Installing' | 'Ready' | 'Upgrading' | 'Degraded' | 'Uninstalling'
+/** An installed app: the `/launcher` entry fields plus the catalog's `locales` keyed by language (`ja`, `en`). */
+export type InstalledApp = {
+  definitionId: string
+  name: string
+  description: string
+  icon: string
+  url: string
+  phase: InstalledPhase
+  current: boolean
+  dependencyOf?: string
+  locales?: Record<string, AppLocale>
+}
+
+export type HomeResponse = { project: LauncherProject; installedApps: InstalledApp[]; sections: HomeSection[]; sources: SourceState[] }
+/** The body cmd/server sends; it names the installed apps `builtinApps`. */
+export type HomeWireBody = Omit<HomeResponse, 'installedApps'> & { builtinApps: InstalledApp[] }
 
 export type HomeState =
   | { status: 'loading' }
@@ -56,6 +78,7 @@ export class HomeError extends Error {
 const ENTRY_STATES: readonly string[] = ['ready', 'preparing', 'restricted'] satisfies EntryState[]
 const RELATIONS: readonly string[] = ['owner', 'group', 'project'] satisfies Relation[]
 const SOURCE_STATES: readonly string[] = ['ready', 'absent', 'unavailable'] satisfies SourceState['state'][]
+const INSTALLED_PHASES: readonly string[] = ['Pending', 'Installing', 'Ready', 'Upgrading', 'Degraded', 'Uninstalling'] satisfies InstalledPhase[]
 
 class InvalidHome extends Error {}
 
@@ -111,16 +134,54 @@ function parseAppEntry(value: unknown): AppEntry {
   }
 }
 
+/** Go omits empty locale fields; a blank one means "not localized" either way. */
+function localeText(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined
+  const trimmed = text(value).trim()
+  return trimmed === '' ? undefined : trimmed
+}
+
+function parseLocales(value: unknown): Record<string, AppLocale> | undefined {
+  if (value === undefined || value === null) return undefined
+  const locales: Record<string, AppLocale> = {}
+  for (const [language, raw] of Object.entries(record(value))) {
+    const locale = record(raw)
+    const title = localeText(locale.title)
+    const tagline = localeText(locale.tagline)
+    locales[language] = { ...(title ? { title } : {}), ...(tagline ? { tagline } : {}) }
+  }
+  return locales
+}
+
+/**
+ * Portal's own reading of an installed app, not the launcher package's strict `Entry` schema:
+ * that schema rejects phases it does not list (`Pending`), and one such app must not take the home down.
+ */
+function parseInstalledApp(value: unknown): InstalledApp {
+  const app = record(value)
+  if (typeof app.current !== 'boolean') throw new InvalidHome()
+  const phase = text(app.phase)
+  const dependencyOf = optionalText(app.dependencyOf)
+  const locales = parseLocales(app.locales)
+  return {
+    definitionId: text(app.definitionId),
+    name: text(app.name),
+    description: text(app.description),
+    icon: text(app.icon),
+    url: text(app.url),
+    phase: INSTALLED_PHASES.includes(phase) ? (phase as InstalledPhase) : 'Pending',
+    current: app.current,
+    ...(dependencyOf ? { dependencyOf } : {}),
+    ...(locales ? { locales } : {}),
+  }
+}
+
 /** Validates a home body; throws on any shape the page could not render faithfully. */
 export function parseHome(value: unknown): HomeResponse {
   const body = record(value)
   const project = LauncherProject.safeParse(body.project)
   if (!project.success) throw new InvalidHome()
-  const installedApps = list(body.builtinApps).map((item) => {
-    const parsed = InstalledAppEntry.safeParse(item)
-    if (!parsed.success) throw new InvalidHome()
-    return parsed.data
-  })
+  const installedApps = list(body.builtinApps).map(parseInstalledApp)
   const sections = list(body.sections).map((item): HomeSection => {
     const section = record(item)
     return {
@@ -134,6 +195,33 @@ export function parseHome(value: unknown): HomeResponse {
     return { definitionId: text(source.definitionId), state: oneOf<SourceState['state']>(source.state, SOURCE_STATES) }
   })
   return { project: project.data, installedApps, sections, sources }
+}
+
+/**
+ * What an app tile shows in `language`: the catalog's localized title and
+ * tagline, each falling back on its own to the served `name` / `description`.
+ */
+export function installedAppText(app: InstalledApp, language: DashboardLanguage): { title: string; tagline: string } {
+  const locale = app.locales?.[language]
+  return { title: locale?.title ?? app.name, tagline: locale?.tagline ?? app.description }
+}
+
+/** Only an app being removed cannot be opened; every other phase navigates (same rule as `@appthrust/app-launcher`). */
+export function isNavigable(app: InstalledApp): boolean {
+  return app.phase !== 'Uninstalling'
+}
+
+/** Tile search: a case-insensitive substring of the shown title or tagline, or of the catalog name. Blank matches all. */
+export function matchesInstalledApp(app: InstalledApp, query: string, language: DashboardLanguage): boolean {
+  const needle = query.trim().toLowerCase()
+  if (needle === '') return true
+  const { title, tagline } = installedAppText(app, language)
+  return [title, tagline, app.name].some((value) => value.toLowerCase().includes(needle))
+}
+
+/** The tiles: every installed app except the page's own (the portal itself), in server order. */
+export function tileApps(apps: readonly InstalledApp[]): InstalledApp[] {
+  return apps.filter((app) => !app.current)
 }
 
 /** One cache entry per search; the key carries `q` exactly as sent (trimmed, blank = no search). */

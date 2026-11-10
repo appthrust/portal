@@ -1,11 +1,14 @@
 # Portal
 
-Portal is AppThrust's employee Home application: the apps installed in a Project
-and the entries exposed by their `launcher.entries/v1` capabilities, in one place.
+Portal is the intranet home of a Project: announcements written by the
+organisation's own people, the apps installed in the Project, and the entries
+exposed by `launcher.entries/v1` providers, on one Japanese-first page.
 A Go server serves the React SPA, `/config`, the authenticated `/launcher` and
-`/api/portal/v1/home` routes, and `/healthz`, `/readyz`, and `/releasez`. Portal has
-no database and does not proxy arbitrary Platform API requests. It is built and
-released independently of the platform.
+`/api/portal/v1/*` routes, and `/healthz`, `/readyz`, and `/releasez`. Portal keeps
+announcements and per-viewer read marks in its own PostgreSQL database and does
+not proxy arbitrary Platform API requests. It is built and released
+independently of the platform. The domain model, API and UI contract are in
+[`design/README.md`](design/README.md).
 
 ## Source and layout
 
@@ -17,7 +20,7 @@ Imported from `appthrust/platform` commit
 - `dashboard/packages/portal/` → `web/`, including the SPA, development mock, and tests.
 - Neither source directory contained a README at the imported revision.
 
-The public Go SDK is `github.com/appthrust/appserver-go v0.2.0`; no platform checkout,
+The public Go SDK is `github.com/appthrust/appserver-go v0.3.0`; no platform checkout,
 module replacement, or private Go credential is required. The launcher and i18n
 packages use the published `^0.1.0` GitHub Packages versions rather than workspace
 packages. Tailwind scans the installed launcher package for its classes.
@@ -48,12 +51,21 @@ Run the server with `go run ./cmd/server --static-dir web/dist`. Configure:
   `--listen 127.0.0.1:8080`.
 - `PORTAL_PUBLIC_URL` for the HTTPS browser origin, without a trailing slash.
 - `PORTAL_STATIC_DIR` or `--static-dir` to override `/srv/portal`.
+- `PORTAL_DATABASE_URL`, falling back to `DATABASE_URL`, for announcements. Without
+  a reachable database the announcement routes answer `503 portal_store_unavailable`
+  and everything else keeps serving; the server never exits on a database failure.
 
-Both probes return `ok`. Unauthenticated launcher and home requests return 401;
+Both probes return `ok` whether or not the database is reachable, because the home
+does not need it. Unauthenticated launcher, home and announcement requests return 401;
 unknown `/api/` paths and missing `/assets/` files return 404 rather than the SPA.
+Project members with the `Admin` or `Editor` role may write announcements; every
+signed-in user may read published ones.
 `/releasez` uses `PORTAL_RELEASE_VERSION` and `PORTAL_ARTIFACT_DIGEST` supplied by the
 catalog, with the shared release-file fallback; missing release identity returns
 503 with `UI release status unavailable`.
+
+Store tests run against PostgreSQL only when `BUILTIN_APPSERVER_TEST_DATABASE_URL`
+is set; without it they are skipped.
 
 Publisher renderer and mocked catalog API tests need no live services:
 
@@ -75,13 +87,19 @@ through a required BuildKit secret, never through build arguments or committed f
 
 ## Catalog and release
 
-`catalog/entry.yaml` preserves the complete spec read from
+`catalog/entry.yaml` started from the spec read from
 `ApplicationStackDefinition/portal` in `appthrust-ink-pmc001` on 2026-11-06, excluding
-cluster-owned metadata. The served compatibility floor is `0.1.0`, stream `0.1`,
-with its original immutable `ghcr.io/appthrust/platform/portal` image. The next
-release is **`0.2.0`**, stream **`0.2`**. No speculative new-version image is committed.
+cluster-owned metadata, and adds the `postgresql` component and `database`
+connection that announcements use. The served compatibility floor is `0.1.0`,
+stream `0.1`, with its original immutable `ghcr.io/appthrust/platform/portal` image.
+Published releases are `0.2.0` and `0.3.0`; the first release with announcements
+is **`0.4.0`**, stream **`0.4`**. No speculative new-version image is committed.
 
-After the release prerequisites are available, push a SemVer tag such as `v0.2.0`.
+Components belong to the definition, not to a version: an existing installation
+receives its database when its stack is next re-rendered by a version update.
+Until then the new image serves the home and reports announcements as unavailable.
+
+To release, push a SemVer tag such as `v0.4.0`.
 The tag workflow:
 
 1. Performs one multi-platform build on `ubuntu-24.04` for Linux amd64 and arm64,

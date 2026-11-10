@@ -3,7 +3,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type ProxyOptions } from 'vite'
 
 // Dev transport mirrors production: cmd/server serves the SPA, `/config`,
-// `/launcher` and `/api/portal/v1/home` from one origin, and the OIDC edge (Envoy) in front of it
+// `/launcher` and `/api/portal/v1/*` from one origin, and the OIDC edge (Envoy) in front of it
 // attaches Authorization. In dev these paths go to the in-repo mock
 // (`bun run mock`, src/dev/mock-server.ts), which needs no token. To exercise a
 // real portal instead, point PORTAL_API_UPSTREAM at it and either set

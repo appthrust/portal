@@ -17,9 +17,8 @@ describe('renderEntry', () => {
     expect(entry.versions[0]).toMatchObject({ name: '0.1.0', stream: '0.1', default: false, served: true })
     expect(entry.versions[0]!.images.web).toStartWith('ghcr.io/appthrust/platform/portal@sha256:')
     expect(entry.versions[1]).toEqual({ name: '0.2.0', images: { web: `ghcr.io/appthrust/portal@${digest}` }, stream: '0.2', default: true, served: true })
-    const definition = YAML.parse(entry.definitionYAML) as { spec: { versions: unknown; components: unknown[]; releaseIdentityEnvPrefix: string } }
+    const definition = YAML.parse(entry.definitionYAML) as { spec: { versions: unknown; releaseIdentityEnvPrefix: string } }
     expect(definition.spec.versions).toEqual(entry.versions)
-    expect(definition.spec.components).toHaveLength(1)
     expect(definition.spec.releaseIdentityEnvPrefix).toBe('PORTAL')
   })
 

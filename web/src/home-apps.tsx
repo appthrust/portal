@@ -1,60 +1,175 @@
-// The employee-portal part of the page, under the installed app grid: one quiet line per
-// provider that could not answer, then the sections exactly as the server
-// ordered them (owner → group → project). Providers decide what a viewer sees
-// and how it opens (employee-portal.md §3.5); this file only renders it.
+// The apps part of the home. **アプリ**: every installed app except Portal as a
+// compact tile in the viewer's language (catalog `locales`, falling back to
+// the served name/description). Then the employee-portal sections: one quiet
+// line per provider that could not answer, then the sections exactly as the
+// server ordered them (owner → group → project). Providers decide what a
+// viewer sees and how it opens (employee-portal.md §3.5); this file only
+// renders it.
 import { iconFor } from '@appthrust/app-launcher'
-import { translateAppCatalogText } from '@appthrust/platform-dashboard-i18n'
+import type { DashboardLanguage } from '@appthrust/platform-dashboard-i18n'
 import { ArrowUpRight, CircleAlert, Lock } from 'lucide-react'
 import { useId } from 'react'
-import type { AppEntry, HomeSection, HomeState } from './home'
+import {
+  installedAppText,
+  isNavigable,
+  matchesInstalledApp,
+  tileApps,
+  type AppEntry,
+  type HomeResponse,
+  type HomeSection,
+  type HomeState,
+  type InstalledApp,
+} from './home'
 import { useText, type Translate } from './i18n'
+import { BUTTON_GHOST, FailureNotice, NOTICE, SectionHeading } from './ui'
 
-const NOTICE = 'rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700'
 const CARD = 'flex w-full min-w-0 flex-col rounded-xl border border-stone-200 bg-white p-4 text-stone-900'
 const BADGE = 'inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs leading-4 font-medium [&_svg]:size-3'
 
-export function HomeApps({ state, stale, search, onRetry }: { state: HomeState; stale: boolean; search: string; onRetry: () => void }) {
+/**
+ * The **アプリ** block and the provider sections under it. The home request's
+ * loading and failure states show once, under the **アプリ** heading.
+ * `search` filters the tiles as typed; `q` is the settled search the sections were asked for.
+ */
+export function HomeApps({
+  state,
+  stale,
+  search,
+  q,
+  dashboardUrl,
+  onRetry,
+}: {
+  state: HomeState
+  stale: boolean
+  search: string
+  q: string
+  dashboardUrl: string
+  onRetry: () => void
+}) {
   const { t, language } = useText()
-  if (state.status === 'loading') {
+  const headingId = useId()
+  return (
+    <>
+      <section aria-labelledby={headingId} data-portal-installed="" className="mt-10">
+        <SectionHeading
+          id={headingId}
+          title={t('portal.apps.title')}
+          actions={
+            <a href={dashboardUrl} className={`${BUTTON_GHOST} -mr-2.5`}>
+              {t('portal.apps.manage')}
+              <ArrowUpRight aria-hidden />
+            </a>
+          }
+        />
+        {state.status === 'loading' ? (
+          <p role="status" className="text-sm text-stone-500">
+            {t('portal.apps.loading')}
+          </p>
+        ) : null}
+        {state.status === 'denied' ? (
+          <p role="alert" className={NOTICE}>
+            {t('portal.apps.denied')}
+          </p>
+        ) : null}
+        {state.status === 'unavailable' ? <FailureNotice message={t('portal.apps.unavailable')} retryLabel={t('portal.retry')} onRetry={onRetry} /> : null}
+        {state.status === 'ready' ? <InstalledApps apps={state.home.installedApps} search={search} t={t} language={language} /> : null}
+      </section>
+      {state.status === 'ready' ? <ProviderSections home={state.home} stale={stale} q={q} t={t} language={language} /> : null}
+    </>
+  )
+}
+
+function InstalledApps({ apps, search, t, language }: { apps: InstalledApp[]; search: string; t: Translate; language: DashboardLanguage }) {
+  const tiles = tileApps(apps)
+  if (tiles.length === 0) {
+    return <p className="text-sm text-stone-500">{t('portal.apps.installedEmpty')}</p>
+  }
+  const matching = tiles.filter((app) => matchesInstalledApp(app, search, language))
+  if (matching.length === 0) {
     return (
-      <p role="status" className="mt-8 text-sm text-stone-500">
-        {t('portal.apps.loading')}
+      <p data-portal-installed-no-matches="" className="text-sm text-stone-500">
+        {t('portal.apps.installedNoMatches')}
       </p>
     )
   }
-  if (state.status === 'denied') {
+  return (
+    <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3">
+      {matching.map((app) => (
+        <li key={app.definitionId} className="flex min-w-0">
+          <AppTile app={app} t={t} language={language} />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+const TILE = 'flex w-full min-w-0 items-start gap-3 rounded-xl border border-stone-200 bg-white px-3 py-3 text-stone-900'
+
+const PHASE_BADGE: Record<Exclude<InstalledApp['phase'], 'Ready'>, string> = {
+  Pending: 'border-sky-200 bg-sky-50 text-sky-800',
+  Installing: 'border-sky-200 bg-sky-50 text-sky-800',
+  Upgrading: 'border-sky-200 bg-sky-50 text-sky-800',
+  Degraded: 'border-amber-300 bg-amber-50 text-amber-900',
+  Uninstalling: 'border-stone-200 bg-stone-100 text-stone-600',
+}
+
+// One box per app: icon, localized title (with a status badge when the app is not Ready), one-line tagline. No hostname.
+function AppTile({ app, t, language }: { app: InstalledApp; t: Translate; language: DashboardLanguage }) {
+  const Icon = iconFor(app.icon)
+  const { title, tagline } = installedAppText(app, language)
+  const content = (
+    <>
+      <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-sm">
+        <Icon className="size-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center gap-2">
+          <span data-portal-app-title="" className="min-w-0 truncate text-[15px] leading-5 font-medium">
+            {title}
+          </span>
+          {app.phase === 'Ready' ? null : (
+            <span data-portal-phase={app.phase} className={`${BADGE} ${PHASE_BADGE[app.phase]}`}>
+              {t(`portal.apps.phase.${app.phase}`)}
+            </span>
+          )}
+        </span>
+        {tagline ? (
+          <span data-portal-app-tagline="" className="mt-0.5 line-clamp-2 block text-xs leading-5 text-stone-500">
+            {tagline}
+          </span>
+        ) : null}
+      </span>
+    </>
+  )
+  if (!isNavigable(app)) {
     return (
-      <p role="alert" className={`mt-8 ${NOTICE}`}>
-        {t('portal.apps.denied')}
-      </p>
-    )
-  }
-  if (state.status === 'unavailable') {
-    return (
-      <div role="alert" className={`mt-8 flex flex-wrap items-center gap-3 ${NOTICE}`}>
-        <span>{t('portal.apps.unavailable')}</span>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="min-h-10 rounded-md border border-stone-300 px-3 font-medium text-stone-800 hover:bg-stone-50"
-        >
-          {t('portal.retry')}
-        </button>
+      <div aria-disabled="true" data-portal-app={app.definitionId} className={`${TILE} cursor-not-allowed opacity-60`}>
+        {content}
       </div>
     )
   }
+  return (
+    <a
+      href={app.url}
+      data-portal-app={app.definitionId}
+      className={`${TILE} shadow-xs transition-[border-color,box-shadow] hover:border-stone-300 hover:shadow-md`}
+    >
+      {content}
+    </a>
+  )
+}
 
-  const { home } = state
+function ProviderSections({ home, stale, q, t, language }: { home: HomeResponse; stale: boolean; q: string; t: Translate; language: DashboardLanguage }) {
   const unavailable = home.sources.filter((source) => source.state === 'unavailable')
   const sections = home.sections.filter((section) => section.entries.length > 0)
   const empty = sections.length === 0 && home.sources.every((source) => source.state === 'ready')
   return (
     <div data-portal-apps="" aria-busy={stale} className={stale ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
       {unavailable.length > 0 ? (
-        <ul className="mt-4 space-y-1">
+        <ul className="mt-6 space-y-1">
           {unavailable.map((source) => {
             const installed = home.installedApps.find((item) => item.definitionId === source.definitionId)
-            const name = installed ? translateAppCatalogText(installed.name, language) : source.definitionId
+            const name = installed ? installedAppText(installed, language).title : source.definitionId
             return (
               <li
                 key={source.definitionId}
@@ -73,7 +188,7 @@ export function HomeApps({ state, stale, search, onRetry }: { state: HomeState; 
       ))}
       {empty ? (
         <p data-portal-apps-empty="" className="mt-8 text-sm text-stone-500">
-          {search.trim() === '' ? t('portal.apps.empty') : t('portal.apps.noMatches')}
+          {q.trim() === '' ? t('portal.apps.empty') : t('portal.apps.noMatches')}
         </p>
       ) : null}
     </div>

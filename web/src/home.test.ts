@@ -9,10 +9,15 @@ import {
   homeQueryKey,
   homeRetryLimit,
   homeStateOf,
+  installedAppText,
+  isNavigable,
+  matchesInstalledApp,
   parseHome,
   shouldRetryHome,
+  tileApps,
   type HomeFetch,
   type HomeState,
+  type InstalledApp,
 } from './home'
 
 async function stateFor(fetchImpl: HomeFetch, q = ''): Promise<HomeState> {
@@ -109,6 +114,96 @@ describe('home state', () => {
       tags: [],
       sourceDefinitionId: 'c',
     })
+  })
+})
+
+const installed = (definitionId: string, overrides: Partial<InstalledApp> = {}): InstalledApp => ({
+  definitionId,
+  name: 'Directory',
+  description: 'People, groups and profiles of this organisation.',
+  icon: 'directory',
+  url: `https://${definitionId}.pj-x.example.test`,
+  phase: 'Ready',
+  current: false,
+  ...overrides,
+})
+
+const wireApp = (extra: Record<string, unknown>) => ({
+  project: { id: 'pj-x', name: 'x' },
+  builtinApps: [{ ...installed('directory'), ...extra }],
+  sections: [],
+  sources: [],
+})
+
+describe('installed app locales', () => {
+  test('the home parser keeps the catalog locales of each installed app', () => {
+    const home = parseHome(
+      wireApp({ locales: { ja: { title: 'ディレクトリ', tagline: 'この組織のメンバー。' }, en: { title: 'Directory' }, fr: {} } })
+    )
+    expect(home.installedApps[0].locales).toEqual({ ja: { title: 'ディレクトリ', tagline: 'この組織のメンバー。' }, en: { title: 'Directory' }, fr: {} })
+    expect(home.installedApps[0].definitionId).toBe('directory')
+  })
+
+  test('absent or null locales parse as no locales; blank fields count as not localized', () => {
+    expect(parseHome(wireApp({})).installedApps[0]).not.toHaveProperty('locales')
+    expect(parseHome(wireApp({ locales: null })).installedApps[0]).not.toHaveProperty('locales')
+    expect(parseHome(wireApp({ locales: { ja: { title: '  ', tagline: null } } })).installedApps[0].locales).toEqual({ ja: {} })
+  })
+
+  test('a locales shape the page cannot trust makes the home unavailable', async () => {
+    for (const locales of [[], 'ja', { ja: 'ディレクトリ' }, { ja: { title: 1 } }]) {
+      expect(() => parseHome(wireApp({ locales }))).toThrow()
+      expect(await stateFor(async () => Response.json(wireApp({ locales })))).toEqual({ status: 'unavailable' })
+    }
+  })
+
+  test('tile text is the localized title and tagline, each falling back on its own to name and description', () => {
+    const app = installed('directory', { locales: { ja: { title: 'ディレクトリ' }, en: { tagline: 'Everyone in the company.' } } })
+    expect(installedAppText(app, 'ja')).toEqual({ title: 'ディレクトリ', tagline: 'People, groups and profiles of this organisation.' })
+    expect(installedAppText(app, 'en')).toEqual({ title: 'Directory', tagline: 'Everyone in the company.' })
+    expect(installedAppText(installed('memo', { name: 'Memo', description: 'Notes.' }), 'ja')).toEqual({ title: 'Memo', tagline: 'Notes.' })
+  })
+
+  test('tiles leave out the current app (the portal) and keep server order', () => {
+    const apps = [installed('b'), installed('portal', { current: true }), installed('a')]
+    expect(tileApps(apps).map((app) => app.definitionId)).toEqual(['b', 'a'])
+  })
+
+  test('only an app being removed cannot be opened', () => {
+    const phases: InstalledApp['phase'][] = ['Pending', 'Installing', 'Ready', 'Upgrading', 'Degraded']
+    for (const phase of phases) expect(isNavigable(installed('x', { phase }))).toBe(true)
+    expect(isNavigable(installed('x', { phase: 'Uninstalling' }))).toBe(false)
+  })
+
+  test('a Pending app or a phase Portal does not know parses as Pending instead of failing the home', () => {
+    expect(parseHome(wireApp({ phase: 'Pending' })).installedApps[0].phase).toBe('Pending')
+    expect(parseHome(wireApp({ phase: 'Migrating' })).installedApps[0].phase).toBe('Pending')
+    expect(parseHome(wireApp({ phase: 'Degraded', dependencyOf: 'builder-console' })).installedApps[0]).toMatchObject({ phase: 'Degraded', dependencyOf: 'builder-console' })
+  })
+
+  test('an installed app missing a required field still makes the home unavailable', () => {
+    for (const broken of [{ phase: 1 }, { current: 'no' }, { url: undefined }, { name: null }]) {
+      expect(() => parseHome(wireApp(broken))).toThrow()
+    }
+  })
+
+  test('search matches the shown title or tagline, or the catalog name, case-insensitively', () => {
+    const app = installed('directory', { locales: { ja: { title: 'ディレクトリ', tagline: '社員名簿とグループ' } } })
+    expect(matchesInstalledApp(app, '  ', 'ja')).toBe(true)
+    expect(matchesInstalledApp(app, 'ディレクトリ', 'ja')).toBe(true)
+    expect(matchesInstalledApp(app, '名簿', 'ja')).toBe(true)
+    expect(matchesInstalledApp(app, 'DIRECTORY', 'ja')).toBe(true)
+    // The English description is not what a Japanese viewer sees, so it does not match.
+    expect(matchesInstalledApp(app, 'profiles', 'ja')).toBe(false)
+    expect(matchesInstalledApp(app, 'profiles', 'en')).toBe(true)
+  })
+
+  test('the mock home serves apps with and without locales', () => {
+    const apps = parseHome(mockHomeBody()).installedApps
+    expect(apps.find((app) => app.definitionId === 'directory')?.locales?.ja?.title).toBe('ディレクトリ')
+    expect(apps.find((app) => app.definitionId === 'knowledge')?.locales).toEqual({ ja: { tagline: expect.any(String) } })
+    expect(apps.find((app) => app.definitionId === 'memo')).not.toHaveProperty('locales')
+    expect(apps.find((app) => app.definitionId === 'llm')?.phase).toBe('Pending')
   })
 })
 

@@ -1,21 +1,26 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/appthrust/appserver-go/appserver/identity"
 	"github.com/appthrust/appserver-go/appserver/launcher"
 	"github.com/appthrust/appserver-go/appserver/link"
+	"github.com/appthrust/appserver-go/appserver/pending"
 	"github.com/appthrust/appserver-go/appserver/platformclient"
 	"github.com/appthrust/appserver-go/appserver/platformenv"
 	"github.com/appthrust/appserver-go/appserver/releaseidentity"
+	"github.com/appthrust/portal/cmd/server/internal/announcements"
 	"github.com/appthrust/portal/cmd/server/internal/home"
 )
 
@@ -28,8 +33,8 @@ func parseOrigin(raw string) (*url.URL, error) {
 	return u, nil
 }
 
-// newHandler serves the employee home, launcher and SPA without a database or API proxy.
-func newHandler(staticDir, platformAPIURL, projectID string, authenticator *identity.Authenticator, catalog *launcher.Catalog, composer *home.Composer) (http.Handler, error) {
+// newHandler keeps the home, launcher, probes and SPA independent of the database.
+func newHandler(staticDir, platformAPIURL, projectID string, authenticator *identity.Authenticator, catalog *launcher.Catalog, composer *home.Composer, notices http.Handler) (http.Handler, error) {
 	upstream, err := platformenv.Validate(platformAPIURL, projectID)
 	if err != nil {
 		return nil, err
@@ -58,6 +63,9 @@ func newHandler(staticDir, platformAPIURL, projectID string, authenticator *iden
 		resolver := link.NewResolver(platform, "portal", os.LookupEnv, nil)
 		composer = home.New(catalog, resolver, link.NewClient(resolver, nil), nil)
 	}
+	if notices == nil {
+		notices = announcements.Unavailable()
+	}
 	config := map[string]string{
 		"projectId":    projectID,
 		"publicUrl":    publicURL,
@@ -70,6 +78,9 @@ func newHandler(staticDir, platformAPIURL, projectID string, authenticator *iden
 	})
 	mux.Handle("GET /launcher", launcher.NewHandler(catalog, authenticator.Authenticate))
 	mux.Handle("GET /api/portal/v1/home", home.NewHandler(composer, authenticator.Authenticate))
+	mux.Handle("/api/portal/v1/me", notices)
+	mux.Handle("/api/portal/v1/announcements", notices)
+	mux.Handle("/api/portal/v1/announcements/", notices)
 	mux.Handle("GET /releasez", releaseidentity.NewHandler("PORTAL", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -86,6 +97,34 @@ func newHandler(staticDir, platformAPIURL, projectID string, authenticator *iden
 		serveStatic(w, r, staticDir)
 	})
 	return mux, nil
+}
+
+func databaseURL() string {
+	if dsn := os.Getenv("PORTAL_DATABASE_URL"); dsn != "" {
+		return dsn
+	}
+	return os.Getenv("DATABASE_URL")
+}
+
+// announcementsHandler connects in the background without changing probe health.
+func announcementsHandler(upstreamURL, projectID string, auth *identity.Authenticator) (*pending.Handler, func()) {
+	handler := pending.Serve(announcements.Unavailable())
+	dsn := databaseURL()
+	if dsn == "" {
+		return handler, func() {}
+	}
+	platform := platformclient.New(upstreamURL, projectID, platformclient.WithHTTPClient(auth.HTTPClient()))
+	stop := pending.Connect("portal database", time.Second, func(ctx context.Context) (io.Closer, error) {
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		database, err := announcements.Open(ctx, dsn)
+		if err != nil {
+			return nil, err
+		}
+		handler.Swap(announcements.New(database, auth.Authenticate, platform, time.Now))
+		return database, nil
+	})
+	return handler, stop
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

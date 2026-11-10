@@ -10,10 +10,13 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/appthrust/appserver-go/appserver/identity"
 	"github.com/appthrust/appserver-go/appserver/launcher"
 	"github.com/appthrust/appserver-go/appserver/link"
+	"github.com/appthrust/appserver-go/appserver/pending"
 	"github.com/appthrust/appserver-go/appserver/platformclient"
 	"github.com/appthrust/appserver-go/appserver/platformenv"
+	"github.com/appthrust/portal/cmd/server/internal/announcements"
 	"github.com/appthrust/portal/cmd/server/internal/home"
 	"github.com/stretchr/testify/require"
 )
@@ -29,7 +32,7 @@ func TestConfigProbesAndSPA(t *testing.T) {
 	portalEnvironment(t)
 	t.Setenv("PORTAL_PUBLIC_URL", "https://home.pj-test.example")
 	static := t.TempDir()
-	handler, err := newHandler(static, "https://dashboard.example/", "pj-test", nil, nil, nil)
+	handler, err := newHandler(static, "https://dashboard.example/", "pj-test", nil, nil, nil, nil)
 	require.NoError(t, err)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/config", nil))
@@ -86,7 +89,7 @@ func TestLauncherUsesViewerBearerAndPortalIdentity(t *testing.T) {
 		}
 	}))
 	defer platform.Close()
-	handler, err := newHandler(t.TempDir(), platform.URL, "pj-test", nil, nil, nil)
+	handler, err := newHandler(t.TempDir(), platform.URL, "pj-test", nil, nil, nil, nil)
 	require.NoError(t, err)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/launcher", nil))
@@ -134,7 +137,7 @@ func TestReleaseMetadataAndFileFallback(t *testing.T) {
 			case "unreadable":
 				t.Setenv("PORTAL_RELEASE_FILE", filepath.Join(t.TempDir(), "missing.json"))
 			}
-			handler, err := newHandler(t.TempDir(), "http://127.0.0.1:1", "pj-test", nil, nil, nil)
+			handler, err := newHandler(t.TempDir(), "http://127.0.0.1:1", "pj-test", nil, nil, nil, nil)
 			require.NoError(t, err)
 			response := httptest.NewRecorder()
 			handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/releasez", nil))
@@ -153,25 +156,25 @@ func TestReleaseMetadataAndFileFallback(t *testing.T) {
 func TestInvalidEnvironmentRejected(t *testing.T) {
 	portalEnvironment(t)
 	for _, project := range []string{"", "UPPER", "a/b", "-project", "project-", strings.Repeat("a", 64)} {
-		_, err := newHandler(t.TempDir(), "https://dashboard.example", project, nil, nil, nil)
+		_, err := newHandler(t.TempDir(), "https://dashboard.example", project, nil, nil, nil, nil)
 		require.ErrorContains(t, err, "PLATFORM_PROJECT_ID must be a non-empty DNS label")
 	}
 	for _, upstream := range []string{"", "http://dashboard.example", "https://user:pass@dashboard.example", "https://dashboard.example/path", "https://dashboard.example?query=1", "https://dashboard.example?", "https://dashboard.example#fragment", "https://dashboard.example#"} {
-		_, err := newHandler(t.TempDir(), upstream, "pj-test", nil, nil, nil)
+		_, err := newHandler(t.TempDir(), upstream, "pj-test", nil, nil, nil, nil)
 		require.ErrorContains(t, err, "PLATFORM_API_URL must be an HTTPS origin", upstream)
 	}
 	for _, upstream := range []string{"https://dashboard.example", "https://dashboard.example/", "http://127.0.0.1:8080", "http://localhost:8080", "http://[::1]:8080"} {
-		_, err := newHandler(t.TempDir(), upstream, "pj-test", nil, nil, nil)
+		_, err := newHandler(t.TempDir(), upstream, "pj-test", nil, nil, nil, nil)
 		require.NoError(t, err, upstream)
 	}
 	for _, public := range []string{"http://localhost:8080", "https://home.example/", "https://home.example/path", "https://home.example#", "https://user@home.example"} {
 		t.Setenv("PORTAL_PUBLIC_URL", public)
-		_, err := newHandler(t.TempDir(), "https://dashboard.example", "pj-test", nil, nil, nil)
+		_, err := newHandler(t.TempDir(), "https://dashboard.example", "pj-test", nil, nil, nil, nil)
 		require.ErrorContains(t, err, "PORTAL_PUBLIC_URL must be an HTTPS origin", public)
 	}
 	t.Setenv("PORTAL_PUBLIC_URL", "")
 	t.Setenv("PLATFORM_OIDC_ISSUER_CA_PEM", "invalid PEM")
-	_, err := newHandler(t.TempDir(), "https://dashboard.example", "pj-test", nil, nil, nil)
+	_, err := newHandler(t.TempDir(), "https://dashboard.example", "pj-test", nil, nil, nil, nil)
 	require.Error(t, err)
 }
 
@@ -230,7 +233,7 @@ func TestHomeRoutePreservesAPICatchAll(t *testing.T) {
 				composer = home.New(catalog, resolver, link.NewClient(resolver, nil), nil)
 				upstream = "http://127.0.0.1:1"
 			}
-			handler, err := newHandler(t.TempDir(), upstream, "pj-test", nil, catalog, composer)
+			handler, err := newHandler(t.TempDir(), upstream, "pj-test", nil, catalog, composer, nil)
 			require.NoError(t, err)
 			response := httptest.NewRecorder()
 			handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/portal/v1/home", nil))
@@ -255,6 +258,81 @@ func TestHomeRoutePreservesAPICatchAll(t *testing.T) {
 				handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
 				require.Equal(t, http.StatusNotFound, response.Code, path)
 			}
+		})
+	}
+}
+
+func TestAnnouncementMountAndSwap(t *testing.T) {
+	portalEnvironment(t)
+	notices := pending.Serve(announcements.Unavailable())
+	handler, err := newHandler(t.TempDir(), "http://127.0.0.1:1", "pj-test", nil, nil, nil, notices)
+	require.NoError(t, err)
+	routes := []struct{ method, path string }{
+		{"GET", "/api/portal/v1/me"},
+		{"GET", "/api/portal/v1/announcements"},
+		{"GET", "/api/portal/v1/announcements/id"},
+		{"POST", "/api/portal/v1/announcements"},
+		{"PATCH", "/api/portal/v1/announcements/id"},
+		{"DELETE", "/api/portal/v1/announcements/id"},
+		{"PUT", "/api/portal/v1/announcements/id/read"},
+		{"POST", "/api/portal/v1/announcements/read-all"},
+	}
+	for _, route := range routes {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(route.method, route.path, nil))
+		require.Equal(t, http.StatusServiceUnavailable, response.Code, route.path)
+		require.Contains(t, response.Body.String(), `"error":"portal_store_unavailable"`)
+		require.Equal(t, "no-store", response.Header().Get("Cache-Control"))
+	}
+	for _, path := range []string{"/api/unknown", "/api/portal/v1/unknown", "/api/portal/v1/me/extra", "/api/portal/v1/announcements/id/extra"} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest("GET", path, nil))
+		require.Equal(t, http.StatusNotFound, response.Code, path)
+	}
+	notices.Swap(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	for _, route := range routes {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(route.method, route.path, nil))
+		require.Equal(t, http.StatusNoContent, response.Code, route.path)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest("GET", "/api/portal/v1/home", nil))
+	require.Equal(t, http.StatusUnauthorized, response.Code)
+}
+
+func TestDatabaseEnvironment(t *testing.T) {
+	for _, tc := range []struct{ portal, generic, want string }{
+		{"", "", ""},
+		{"", "fallback", "fallback"},
+		{"primary", "fallback", "primary"},
+	} {
+		t.Setenv("PORTAL_DATABASE_URL", tc.portal)
+		t.Setenv("DATABASE_URL", tc.generic)
+		require.Equal(t, tc.want, databaseURL())
+	}
+}
+
+func TestDatabaseDoesNotGateProbes(t *testing.T) {
+	for _, dsn := range []string{"", "postgres://127.0.0.1:1/portal?sslmode=disable&connect_timeout=1"} {
+		t.Run(dsn, func(t *testing.T) {
+			portalEnvironment(t)
+			t.Setenv("PORTAL_DATABASE_URL", dsn)
+			t.Setenv("DATABASE_URL", "")
+			auth, err := identity.New(identity.FromEnv("PORTAL"))
+			require.NoError(t, err)
+			notices, stop := announcementsHandler("http://127.0.0.1:1", "pj-test", auth)
+			defer stop()
+			handler, err := newHandler(t.TempDir(), "http://127.0.0.1:1", "pj-test", auth, nil, nil, notices)
+			require.NoError(t, err)
+			for _, path := range []string{"/healthz", "/readyz"} {
+				response := httptest.NewRecorder()
+				handler.ServeHTTP(response, httptest.NewRequest("GET", path, nil))
+				require.Equal(t, http.StatusOK, response.Code)
+				require.Equal(t, "ok\n", response.Body.String())
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, httptest.NewRequest("GET", "/api/portal/v1/me", nil))
+			require.Equal(t, http.StatusServiceUnavailable, response.Code)
 		})
 	}
 }
