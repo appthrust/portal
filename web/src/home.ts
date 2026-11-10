@@ -235,21 +235,21 @@ export function tileApps(apps: readonly InstalledApp[]): InstalledApp[] {
 
 /** The purpose groups of the アプリ block, in page order (design/README.md, UI item 4). */
 export type AppGroupId = 'everyday' | 'ai' | 'manage'
-/** One purpose group: its apps in server order; a `collapsed` group starts closed behind a disclosure. */
-export type AppGroup = { id: AppGroupId; collapsed: boolean; apps: InstalledApp[] }
+/** One purpose group: its apps in server order. */
+export type AppGroup = { id: AppGroupId; apps: InstalledApp[] }
 
 const GROUP_OF_CATEGORY: Readonly<Record<string, AppGroupId>> = { collaborate: 'everyday', assist: 'ai' }
 
 /**
  * Sorts apps into the purpose groups by catalog category: `collaborate` → everyday work,
- * `assist` → AI, any other category or none → build and manage (collapsed). Groups keep
+ * `assist` → AI, any other category or none → build and manage. Groups keep
  * page order and server order within; a group with no app is left out.
  */
 export function groupInstalledApps(apps: readonly InstalledApp[]): AppGroup[] {
   const groups: AppGroup[] = [
-    { id: 'everyday', collapsed: false, apps: [] },
-    { id: 'ai', collapsed: false, apps: [] },
-    { id: 'manage', collapsed: true, apps: [] },
+    { id: 'everyday', apps: [] },
+    { id: 'ai', apps: [] },
+    { id: 'manage', apps: [] },
   ]
   for (const app of apps) {
     const id = app.category !== undefined && Object.hasOwn(GROUP_OF_CATEGORY, app.category) ? GROUP_OF_CATEGORY[app.category] : 'manage'
