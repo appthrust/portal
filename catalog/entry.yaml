@@ -21,6 +21,17 @@ spec:
       name: web-service
       version: v1
     id: web
+  - defaultValues:
+      provider: CNPG
+      storageSize: 1Gi
+    definitionRef:
+      name: postgresql
+      version: v1
+    id: database
+  connections:
+  - from: web
+    name: database
+    to: database
   consumes:
   - launcher.entries/v1
   display:
