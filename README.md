@@ -87,19 +87,22 @@ through a required BuildKit secret, never through build arguments or committed f
 
 ## Catalog and release
 
-`catalog/entry.yaml` started from the spec read from
+`catalog/entry.yaml` preserves the complete spec read from
 `ApplicationStackDefinition/portal` in `appthrust-ink-pmc001` on 2026-11-06, excluding
-cluster-owned metadata, and adds the `postgresql` component and `database`
-connection that announcements use. The served compatibility floor is `0.1.0`,
-stream `0.1`, with its original immutable `ghcr.io/appthrust/platform/portal` image.
-Published releases are `0.2.0` and `0.3.0`; the first release with announcements
-is **`0.4.0`**, stream **`0.4`**. No speculative new-version image is committed.
+cluster-owned metadata. The served compatibility floor is `0.1.0`, stream `0.1`,
+with its original immutable `ghcr.io/appthrust/platform/portal` image. No speculative
+new-version image is committed.
 
-Components belong to the definition, not to a version: an existing installation
-receives its database when its stack is next re-rendered by a version update.
-Until then the new image serves the home and reports announcements as unavailable.
+**Do not change `spec.components`, `spec.connections`, `spec.valuesSchema` or
+`spec.defaultValues` in the entry.** Installed platforms reject any such change to
+an existing definition (`ApplicationStackDefinition "portal" components are
+immutable`), and that rejection fails the whole catalog projection for every app,
+not only Portal. `0.4.0` added a `postgresql` component and stopped catalog sync
+until `0.4.1` restored the entry. Consequently no installation has a database
+yet: the image serves the home and reports announcements as unavailable. The
+storage path is an open decision in [`design/README.md`](design/README.md).
 
-To release, push a SemVer tag such as `v0.4.0`.
+To release, push a SemVer tag such as `v0.4.2`.
 The tag workflow:
 
 1. Performs one multi-platform build on `ubuntu-24.04` for Linux amd64 and arm64,
