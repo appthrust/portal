@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -116,6 +117,31 @@ func TestLauncherUsesViewerBearerAndPortalIdentity(t *testing.T) {
 		{DefinitionID: "portal", Name: "Home", Description: "All built-in apps", Icon: "layout-dashboard", URL: "https://home.pj-test.example", Phase: "Ready", Current: true},
 	}, body.Entries)
 	require.EqualValues(t, 3, calls.Load())
+}
+
+func TestReleaseUnavailableRequestLog(t *testing.T) {
+	portalEnvironment(t)
+	t.Setenv("PORTAL_RELEASE_FILE", filepath.Join(t.TempDir(), "missing.json"))
+	handler, err := newHandler(t.TempDir(), "http://127.0.0.1:1", "pj-test", nil, nil, nil, nil)
+	require.NoError(t, err)
+
+	var logs bytes.Buffer
+	server := newServer(":8080", handler, &logs)
+	response := httptest.NewRecorder()
+	server.Handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/releasez?private=query-marker", nil))
+	require.Equal(t, http.StatusServiceUnavailable, response.Code)
+	require.NotContains(t, logs.String(), "query-marker")
+	require.Equal(t, 1, bytes.Count(logs.Bytes(), []byte{'\n'}))
+	var line struct {
+		Service, Path, Outcome, Reason string
+		Status                         int
+	}
+	require.NoError(t, json.Unmarshal(logs.Bytes(), &line))
+	require.Equal(t, "portal", line.Service)
+	require.Equal(t, "/releasez", line.Path)
+	require.Equal(t, response.Code, line.Status)
+	require.Equal(t, "unavailable", line.Outcome)
+	require.Equal(t, "release_metadata_unavailable", line.Reason)
 }
 
 func TestReleaseMetadataAndFileFallback(t *testing.T) {
