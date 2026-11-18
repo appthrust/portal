@@ -20,6 +20,7 @@ import (
 	"github.com/appthrust/appserver-go/appserver/platformclient"
 	"github.com/appthrust/appserver-go/appserver/platformenv"
 	"github.com/appthrust/appserver-go/appserver/releaseidentity"
+	"github.com/appthrust/appserver-go/appserver/requestlog"
 	"github.com/appthrust/portal/cmd/server/internal/announcements"
 	"github.com/appthrust/portal/cmd/server/internal/directory"
 	"github.com/appthrust/portal/cmd/server/internal/home"
@@ -83,7 +84,8 @@ func newHandler(staticDir, platformAPIURL, projectID string, authenticator *iden
 	mux.Handle("/api/portal/v1/me", notices)
 	mux.Handle("/api/portal/v1/announcements", notices)
 	mux.Handle("/api/portal/v1/announcements/", notices)
-	mux.Handle("GET /releasez", releaseidentity.NewHandler("PORTAL", func(w http.ResponseWriter, _ *http.Request) {
+	mux.Handle("GET /releasez", releaseidentity.NewHandler("PORTAL", func(w http.ResponseWriter, r *http.Request) {
+		requestlog.SetOutcome(r, "unavailable", "release_metadata_unavailable")
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte("UI release status unavailable\n"))

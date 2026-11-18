@@ -10,6 +10,7 @@ import (
 	"github.com/appthrust/appserver-go/appserver/identity"
 	"github.com/appthrust/appserver-go/appserver/launcher"
 	"github.com/appthrust/appserver-go/appserver/link"
+	"github.com/appthrust/appserver-go/appserver/requestlog"
 )
 
 // NewHandler serves GET /api/portal/v1/home with the shared launcher's viewer
@@ -60,6 +61,12 @@ func NewHandler(composer *Composer, authenticate launcher.AuthenticateFunc) http
 			}
 			httpx.WriteError(w, err, "portal")
 			return
+		}
+		for _, source := range page.Sources {
+			if source.State == "unavailable" {
+				requestlog.SetOutcome(r, "partial", "entry_provider_unavailable")
+				break
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "private, no-store")
